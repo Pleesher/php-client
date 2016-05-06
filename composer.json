@@ -1,0 +1,16 @@
+{
+	"name": "pleesher/client",
+	"description": "Pleesher Client",
+	"keywords": ["psr", "psr-3", "log"],
+	"license": "MIT",
+	"authors": [
+		{
+			"name": "Jérémy Touati",
+			"homepage": "https://pleesher.com"
+		}
+	],
+	
+	"autoload": {
+		"psr-4": {"Pleesher\\": "src/Pleesher"}
+	}
+}
