@@ -44,7 +44,6 @@ abstract class Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		echo '<pre>'; debug_print_backtrace(DEBUG_BACKTRACE_IGNORE_ARGS); echo '</pre>';
 		// Initialize cURL
 
 		if (!function_exists('curl_version'))
