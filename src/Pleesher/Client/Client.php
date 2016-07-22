@@ -37,44 +37,12 @@ class Client extends Oauth2Client
 	 * Checks an user's achievements
 	 * @param int $user_id
 	 */
+
 	public function checkAchievements($user_id, array $goal_codes = null)
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$goal_ids = array();
-
-		$this->cache_storage->refreshAll($user_id, 'goal');
-		foreach ($this->getGoals(array('user_id' => $user_id)) as $goal)
-		{
-			if (is_array($goal_codes) && !in_array($goal->code, $goal_codes))
-				continue;
-
-			if ($goal->achieved)
-				continue;
-
-			if (!isset($this->goal_checkers[$goal->code]))
-				continue;
-
-			$check_result = $this->goal_checkers[$goal->code]($goal, $user_id);
-			if (is_array($check_result) && count($check_result) == 2)
-			{
-				list($current, $target) = $check_result;
-				$check_result = $current >= $target;
-			}
-			if ($check_result)
-				$goal_ids[] = $goal->id;
-		}
-
-		$awarded_goal_ids = $goal_ids;	// FIXME: check the result of award, need exception system first
-		if (count($goal_ids) > 0)
-			$this->award($user_id, $goal_ids);
-
-		if (count($awarded_goal_ids) > 0)
-		{
-			$this->cache_storage->refreshAll($user_id, 'notification');
-			$this->cache_storage->refresh($user_id, 'user', $user_id);
-			$this->fireAchievementsAwarded($awarded_goal_ids);
-		}
+		$this->getGoals(array('user_id' => $user_id));
 	}
 
 	/**
@@ -107,10 +75,11 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		$user_id = isset($options['user_id']) ? $options['user_id'] : null;
-		$cache_key = 'goal';
+		$cache_key = isset($user_id) ? 'goal_relative_to_user' : 'goal';
 
 		$goals = $this->cache_storage->loadAll($user_id, $cache_key);
 
+		$awarded_goal_codes = array();
 		if (count($goals) == 0)
 		{
 			$data = array();
@@ -122,12 +91,26 @@ class Client extends Oauth2Client
 			foreach ($goals as $goal)
 			{
 				if (isset($user_id))
+				{
 					$goal = $this->computeGoalProgress($goal, $user_id);
+					if (!empty($goal->just_awarded) && !empty($goal->code))
+					{
+						$awarded_goal_codes[] = $goal->code;
+						unset($goal->just_awarded);
+					}
+				}
 				$this->cache_storage->save($user_id, $cache_key, $goal->id, $goal);
 			}
 		}
 
-		return $goals;
+		if (count($awarded_goal_codes) > 0)
+		{
+			$this->cache_storage->refreshAll($user_id, 'notification');
+			$this->cache_storage->refresh($user_id, 'user', $user_id);
+			$this->fireAchievementsAwarded($awarded_goal_codes);
+		}
+
+		return $this->cache_storage->loadAll($user_id, $cache_key);
 	}
 
 	/**
@@ -139,25 +122,8 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$user_id = isset($options['user_id']) ? $options['user_id'] : null;
-		$cache_key = 'goal';
-
-		$goal = $this->cache_storage->load($user_id, $cache_key, $goal_id_or_code);
-
-		if (is_null($goal))
-		{
-			$data = array('goal_id' => $goal_id_or_code);
-			if (isset($user_id))
-				$data['user_id'] = (int)$user_id;
-
-			$goal = $this->call('GET', 'goal', $data);
-			$this->cache_storage->save($user_id, $cache_key, $goal->id, $goal);
-		}
-
-		if (isset($user_id))
-			$goal = $this->computeGoalProgress($goal, $user_id);
-
-		return $goal;
+		$goals = $this->getGoals($options);
+		return isset($goals[$goal_id_or_code]) ? $goals[$goal_id_or_code] : null;
 	}
 
 	public function getAchievements($user_id)
@@ -168,6 +134,29 @@ class Client extends Oauth2Client
 		return array_filter($goals, function($goal) {
 			return $goal->achieved;
 		});
+	}
+
+	/**
+	 * Retrieves the list of achievers for a given goal
+	 * @param array $options
+	 */
+	public function getAchievers($goal_id, array $options = array())
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		$cache_key = 'achiever_of_' . $goal_id;
+
+		$achievers = $this->cache_storage->loadAll(null, $cache_key);
+
+		if (count($achievers) == 0)
+		{
+			$achievers = $this->call('GET', 'achievers', array('goal_id' => $goal_id));
+
+			foreach ($achievers as $achiever)
+				$this->cache_storage->save(null, $cache_key, $achiever->id, $achiever);
+		}
+
+		return $achievers;
 	}
 
 	/**
@@ -448,7 +437,8 @@ class Client extends Oauth2Client
 			if ((!isset($goal->participation) || $goal->participation->status != 'achieved') && $goal->achieved)
 			{
 				$this->award($user_id, array($goal->id));
-				$goal = $this->getGoal($goal->id, array('user_id' => $user_id));
+				if (!is_null($goal))
+					$goal->just_awarded = true;
 			}
 		}
 		else
