@@ -47,10 +47,13 @@ class DatabaseStorage implements Storage
 		if ($query->rowCount() > 0)
 			return array();
 
-		$sql = 'SELECT data FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key';
+		$sql = 'SELECT id, data FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key';
 		$query = $this->db->prepare($sql);
 		$query->execute($params);
-		$result = $query->fetchAll(\PDO::FETCH_COLUMN);
+
+		$result = array_map(function($row) {
+			return $row['data'];
+		}, $query->fetchAll(\PDO::FETCH_UNIQUE | \PDO::FETCH_ASSOC));
 
 		return array_map('json_decode', $result);
 	}
