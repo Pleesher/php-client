@@ -136,7 +136,10 @@ abstract class Oauth2Client
 		list($http_status, $headers, $body) = $webservice_result;
 		$result_contents = json_decode($body);
 		if (($json_error = json_last_error()) !== JSON_ERROR_NONE)
+		{
+			$this->logger->error('cURL result error: ' . $body);
 			throw new Exception('Could not parse webservice query result');
+		}
 
 		switch ($http_status)
 		{
