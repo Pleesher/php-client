@@ -1,7 +1,7 @@
 {
 	"name": "pleesher/client",
 	"description": "Pleesher Client",
-	"keywords": ["psr", "psr-3", "log"],
+	"keywords": ["api", "goals", "achievements", "oauth2"],
 	"license": "MIT",
 	"authors": [
 		{
