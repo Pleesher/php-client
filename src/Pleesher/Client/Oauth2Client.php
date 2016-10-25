@@ -10,7 +10,8 @@ abstract class Oauth2Client
 	protected $client_secret;
 	protected $api_version;
 	protected $cache_storage;
-	protected $logger;
+
+	public $logger;
 
 	public function __construct($client_id, $client_secret, $api_version = '1.0', array $options = array())
 	{
@@ -37,7 +38,19 @@ abstract class Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		return $this->getResultContents($this->callWebservice($verb, $url, $data));
+		try {
+			return $this->getResultContents($this->callWebservice($verb, $url, $data));
+		} catch (Exception $e) {
+			$this->logger->error($e->getMessage(), $e->getTrace());
+
+			if ($e->getMessage() == 'invalid_token')
+			{
+				$this->refreshAccessToken();
+				return $this->getResultContents($this->callWebservice($verb, $url, $data));
+			}
+
+			throw $e;
+		}
 	}
 
 	protected function curl(array $curl_options)
@@ -150,10 +163,11 @@ abstract class Oauth2Client
 				throw new NoSuchObjectException($result_contents->error);
 
 			default:
-				throw new Exception($result_contents->error);
+				throw new Exception($result_contents->error_description, $result_contents->error);
 		}
 	}
 
 	protected abstract function getRootUrl();
 	protected abstract function getAccessToken();
+	protected abstract function refreshAccessToken();
 }
