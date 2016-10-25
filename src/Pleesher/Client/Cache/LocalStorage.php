@@ -88,12 +88,38 @@ class LocalStorage implements Storage
 			$this->fallbackStorage->refresh($user_id, $key, $id);
 	}
 
-	public function refreshAll($user_id, $key)
+	public function refreshAll($user_id, $key = null)
 	{
-		$unique_key = $key . '_' . (isset($user_id) ? $user_id : '0');
-		unset($this->entries[$unique_key]);
+		foreach ($this->entries as $_unique_key => $_entry)
+		{
+			list($_key, $_user_id, $_id) = explode('_', $_unique_key);
+
+			if ($user_id == $_user_id)
+			{
+				if (!isset($key) || (isset($key) && $key == $_key))
+					unset($this->entries[$_unique_key]);
+			}
+		}
 
 		if (isset($this->fallbackStorage))
 			$this->fallbackStorage->refreshAll($user_id, $key);
+	}
+
+	public function refreshGlobally($key = null)
+	{
+		if (isset($key))
+		{
+			foreach ($this->entries as $unique_key => $entry)
+			{
+				list($_key, $_user_id, $_id) = explode('_', $unique_key);
+				if ($_user_id = $user_id)
+					unset($this->entries[$unique_key]);
+			}
+		}
+		else
+			$this->entries = array();
+
+		if (isset($this->fallbackStorage))
+			$this->fallbackStorage->refreshGlobally($key);
 	}
 }

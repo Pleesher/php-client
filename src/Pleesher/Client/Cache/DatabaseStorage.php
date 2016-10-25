@@ -67,10 +67,35 @@ class DatabaseStorage implements Storage
 		$query->execute($params);
 	}
 
-	public function refreshAll($user_id, $key)
+	public function refreshAll($user_id, $key = null)
 	{
-		$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key';
-		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key);
+		if (isset($key))
+		{
+			$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key';
+			$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key);
+		}
+		else
+		{
+			$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id';
+			$params = array(':user_id' => isset($user_id) ? $user_id : 0);
+		}
+
+		$query = $this->db->prepare($sql);
+		$query->execute($params);
+	}
+
+	public function refreshGlobally($key = null)
+	{
+		if (isset($key))
+		{
+			$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `key` = :key';
+			$params = array(':key' => $key);
+		}
+		else
+		{
+			$sql = 'TRUNCATE TABLE ' . $this->cache_table_name;
+			$params = array();
+		}
 
 		$query = $this->db->prepare($sql);
 		$query->execute($params);

@@ -8,4 +8,5 @@ interface Storage
 	function loadAll($user_id, $key);
 	function refresh($user_id, $key, $id);
 	function refreshAll($user_id, $key);
+	function refreshGlobally($key);
 }
