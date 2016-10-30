@@ -3,6 +3,8 @@ namespace Pleesher\Client\Cache;
 
 class LocalStorage implements Storage
 {
+	const KEY_SEPARATOR = '##__##';
+
 	protected $fallbackStorage;
 	protected $entries = array();
 	protected $obsolete_keys = array();
@@ -14,8 +16,8 @@ class LocalStorage implements Storage
 
 	public function save($user_id, $key, $id, $data)
 	{
-		$unique_key = $key . '_' . (isset($user_id) ? $user_id : '0');
-		unset($this->obsolete_keys[$unique_key . '_' . (isset($id) ? $id : '0')]);
+		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
+		unset($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
 
 		if (is_null($id))
 			$this->entries[$unique_key] = $data;
@@ -32,8 +34,8 @@ class LocalStorage implements Storage
 
 	public function load($user_id, $key, $id = null, $default = null)
 	{
-		$unique_key = $key . '_' . (isset($user_id) ? $user_id : '0');
-		$obsolete = !empty($this->obsolete_keys[$unique_key . '_' . (isset($id) ? $id : '0')]);
+		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
+		$obsolete = !empty($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
 
 		if (is_null($id))
 		{
@@ -56,14 +58,14 @@ class LocalStorage implements Storage
 
 	public function loadAll($user_id, $key)
 	{
-		$unique_key = $key . '_' . (isset($user_id) ? $user_id : '0');
+		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
 
 		if (isset($this->entries[$unique_key]))
 		{
 			$obsolete = false;
 			foreach (array_keys($this->entries[$unique_key]) as $id)
 			{
-				if (!empty($this->obsolete_keys[$unique_key . '_' . (isset($id) ? $id : '0')]))
+				if (!empty($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]))
 				{
 					$obsolete = true;
 					break;
@@ -81,7 +83,7 @@ class LocalStorage implements Storage
 
 	public function refresh($user_id, $key, $id = null)
 	{
-		$unique_key = $key . '_' . (isset($user_id) ? $user_id : '0') . '_' . (isset($id) ? $id : '0');
+		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0') . self::KEY_SEPARATOR . (isset($id) ? $id : '0');
 
 		$this->obsolete_keys[$unique_key] = true;
 		if (isset($this->fallbackStorage))
@@ -92,7 +94,7 @@ class LocalStorage implements Storage
 	{
 		foreach ($this->entries as $_unique_key => $_entry)
 		{
-			list($_key, $_user_id, $_id) = explode('_', $_unique_key);
+			list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
 
 			if ($user_id == $_user_id)
 			{
@@ -111,7 +113,7 @@ class LocalStorage implements Storage
 		{
 			foreach ($this->entries as $unique_key => $entry)
 			{
-				list($_key, $_user_id, $_id) = explode('_', $unique_key);
+				list($_key, $_user_id, $_id) = explode(self::KEY_SEPARATOR, $unique_key);
 				if ($_user_id = $user_id)
 					unset($this->entries[$unique_key]);
 			}
