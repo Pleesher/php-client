@@ -11,6 +11,11 @@ class Exception extends \Exception
 		$this->error_code = $error_code;
 	}
 
+	public function getErrorCode()
+	{
+		return $this->error_code;
+	}
+
 	public function __toString()
 	{
 		ob_start();
