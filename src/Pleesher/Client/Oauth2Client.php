@@ -41,9 +41,9 @@ abstract class Oauth2Client
 		try {
 			return $this->getResultContents($this->callWebservice($verb, $url, $data));
 		} catch (Exception $e) {
-			$this->logger->error($e->getMessage(), $e->getTrace());
+			$this->logger->error($e->__toString(), $e->getTrace());
 
-			if ($e->getMessage() == 'invalid_token')
+			if ($e->getErrorCode() == 'invalid_token')
 			{
 				$this->refreshAccessToken();
 				return $this->getResultContents($this->callWebservice($verb, $url, $data));
