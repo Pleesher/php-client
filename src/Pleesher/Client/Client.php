@@ -219,7 +219,17 @@ class Client extends Oauth2Client
 		if (isset($filters['max_age']))
 			$params = array('max_age' => $filters['max_age']);
 
-		$participations = $this->call('GET', 'participations', $params);
+		$cache_key = 'participations_'
+			. (isset($filters['status']) ? $filters['status'] : 'anystatus') . '_'
+			. (isset($filters['max_age']) ? $filters['max_age'] : 'anymaxage');
+
+		$participations = $this->cache_storage->load(null, $cache_key, null);
+		if (!is_array($participations))
+		{
+			$participations = $this->call('GET', 'participations', $params);
+			$this->cache_storage->save(null, $cache_key, null, $participations);
+		}
+
 		foreach ($participations as $participation)
 			$participation->datetime = new \DateTime($participation->datetime->date, new \DateTimeZone($participation->datetime->timezone));
 
