@@ -60,8 +60,8 @@ class DatabaseStorage implements Storage
 
 	public function refresh($user_id, $key, $id = 0)
 	{
-		$sql = 'UPDATE ' . $this->cache_table_name . ' SET obsolete = 1 WHERE `user_id` = :user_id AND `key` = :key AND id = :id';
-		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key, ':id' => isset($id) ? $id : 0);
+		$sql = 'UPDATE ' . $this->cache_table_name . ' SET obsolete = 1 WHERE `user_id` = :user_id AND `key` LIKE :key AND id = :id';
+		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => str_replace('*', '%', $key), ':id' => isset($id) ? $id : 0);
 
 		$query = $this->db->prepare($sql);
 		$query->execute($params);
@@ -71,8 +71,8 @@ class DatabaseStorage implements Storage
 	{
 		if (isset($key))
 		{
-			$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key';
-			$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key);
+			$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` LIKE :key';
+			$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => str_replace('*', '%', $key));
 		}
 		else
 		{
@@ -88,8 +88,8 @@ class DatabaseStorage implements Storage
 	{
 		if (isset($key))
 		{
-			$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `key` = :key';
-			$params = array(':key' => $key);
+			$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `key` LIKE :key';
+			$params = array(':key' => str_replace('*', '%', $key));
 		}
 		else
 		{

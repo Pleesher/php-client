@@ -83,9 +83,13 @@ class LocalStorage implements Storage
 
 	public function refresh($user_id, $key, $id = null)
 	{
-		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0') . self::KEY_SEPARATOR . (isset($id) ? $id : '0');
+		foreach ($this->entries as $_unique_key => $_entry)
+		{
+			list($_key, $_user_id, $_id) = explode(self::KEY_SEPARATOR, $_unique_key);
+			if ($user_id == $_user_id && $this->keyMatches($key, $_key) && ($id ?: '0') == $_id)
+				$this->obsolete_keys[$unique_key] = true;
+		}
 
-		$this->obsolete_keys[$unique_key] = true;
 		if (isset($this->fallbackStorage))
 			$this->fallbackStorage->refresh($user_id, $key, $id);
 	}
@@ -98,7 +102,7 @@ class LocalStorage implements Storage
 
 			if ($user_id == $_user_id)
 			{
-				if (!isset($key) || (isset($key) && $key == $_key))
+				if (!isset($key) || (isset($key) && $this->keyMatches($key, $_key)))
 					unset($this->entries[$_unique_key]);
 			}
 		}
@@ -111,11 +115,11 @@ class LocalStorage implements Storage
 	{
 		if (isset($key))
 		{
-			foreach ($this->entries as $unique_key => $entry)
+			foreach (array_keys($this->entries) as $_unique_key)
 			{
-				list($_key, $_user_id, $_id) = explode(self::KEY_SEPARATOR, $unique_key);
-				if ($_user_id = $user_id)
-					unset($this->entries[$unique_key]);
+				list($_key, $_user_id, $_id) = explode(self::KEY_SEPARATOR, $_unique_key);
+				if ($_user_id == $user_id && $this->keyMatches($key, $_key))
+					unset($this->entries[$_unique_key]);
 			}
 		}
 		else
@@ -123,5 +127,13 @@ class LocalStorage implements Storage
 
 		if (isset($this->fallbackStorage))
 			$this->fallbackStorage->refreshGlobally($key);
+	}
+
+	protected function keyMatches($key_pattern, $actual_key)
+	{
+		if (strpos($key_pattern, '*') === false)
+			return $key_pattern == $actual_key;
+
+		return preg_match('/^' . str_replace('\*', '.*?', preg_quote($key_pattern)) . '$/', $actual_key);
 	}
 }
