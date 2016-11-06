@@ -85,8 +85,8 @@ class LocalStorage implements Storage
 	{
 		foreach ($this->entries as $_unique_key => $_entry)
 		{
-			list($_key, $_user_id, $_id) = explode(self::KEY_SEPARATOR, $_unique_key);
-			if ($user_id == $_user_id && $this->keyMatches($key, $_key) && ($id ?: '0') == $_id)
+			list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
+			if ($user_id == $_user_id && $this->keyMatches($key, $_key))
 				$this->obsolete_keys[$unique_key] = true;
 		}
 
@@ -117,7 +117,7 @@ class LocalStorage implements Storage
 		{
 			foreach (array_keys($this->entries) as $_unique_key)
 			{
-				list($_key, $_user_id, $_id) = explode(self::KEY_SEPARATOR, $_unique_key);
+				list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
 				if ($_user_id == $user_id && $this->keyMatches($key, $_key))
 					unset($this->entries[$_unique_key]);
 			}
