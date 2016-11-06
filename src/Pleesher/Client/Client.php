@@ -246,16 +246,14 @@ class Client extends Oauth2Client
 
 		$goal = $this->getGoal($goal_id_or_code);
 
-		$cache_key = 'achiever_of_' . $goal->id;
+		$cache_key = 'achievers_of_' . $goal->id;
 
-		$achievers = $this->cache_storage->loadAll(null, $cache_key);
+		$achievers = $this->cache_storage->load(null, $cache_key, null);
 
-		if (count($achievers) == 0)
+		if (!is_array($achievers))
 		{
 			$achievers = $this->call('GET', 'achievers', array('goal_id' => $goal->id));
-
-			foreach ($achievers as $achiever)
-				$this->cache_storage->save(null, $cache_key, $achiever->id, $achiever);
+			$this->cache_storage->save(null, $cache_key, null, $achievers);
 		}
 
 		return $achievers;
