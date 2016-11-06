@@ -19,14 +19,9 @@ class LocalStorage implements Storage
 		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
 		unset($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
 
-		if (is_null($id))
-			$this->entries[$unique_key] = $data;
-		else
-		{
-			if (!isset($this->entries[$unique_key]))
-				$this->entries[$unique_key] = array();
-			$this->entries[$unique_key][$id] = $data;
-		}
+		if (!isset($this->entries[$unique_key]))
+			$this->entries[$unique_key] = array();
+		$this->entries[$unique_key][isset($id) ? $id : 0] = $data;
 
 		if (isset($this->fallbackStorage))
 			$this->fallbackStorage->save($user_id, $key, $id, $data);
@@ -37,21 +32,10 @@ class LocalStorage implements Storage
 		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
 		$obsolete = !empty($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
 
-		if (is_null($id))
-		{
-			if (!$obsolete && isset($this->entries[$unique_key]))
-				return $this->entries[$unique_key];
-			if (isset($this->fallbackStorage))
-				return $this->entries[$unique_key] = $this->fallbackStorage->load($user_id, $key, $id, $default);
-		}
-
-		else
-		{
-			if (!$obsolete && isset($this->entries[$unique_key][$id]))
-				return $this->entries[$unique_key][$id];
-			if (isset($this->fallbackStorage))
-				return $this->entries[$unique_key][$id] = $this->fallbackStorage->load($user_id, $key, $id, $default);
-		}
+		if (!$obsolete && isset($this->entries[$unique_key][isset($id) ? $id : 0]))
+			return $this->entries[$unique_key][isset($id) ? $id : 0];
+		if (isset($this->fallbackStorage))
+			return $this->entries[$unique_key][isset($id) ? $id : 0] = $this->fallbackStorage->load($user_id, $key, $id, $default);
 
 		return $default;
 	}
@@ -83,11 +67,22 @@ class LocalStorage implements Storage
 
 	public function refresh($user_id, $key, $id = null)
 	{
-		foreach ($this->entries as $_unique_key => $_entry)
+		if (strpos($key, '*') === false)
 		{
-			list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
-			if ($user_id == $_user_id && $this->keyMatches($key, $_key))
-				$this->obsolete_keys[$unique_key] = true;
+			$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0') . self::KEY_SEPARATOR . (isset($id) ? $id : '0');
+			$this->obsolete_keys[$unique_key] = true;
+		}
+		else
+		{
+			foreach ($this->entries as $_unique_key => $_sub_entries)
+			{
+				list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
+				foreach (array_keys($_sub_entries) as $_id)
+				{
+					if (($user_id ?: '0') == $_user_id && $this->keyMatches($key, $_key) && ($id ?: '0') == $_id)
+						$this->obsolete_keys[$_unique_key . self::KEY_SEPARATOR . $_id] = true;
+				}
+			}
 		}
 
 		if (isset($this->fallbackStorage))
@@ -96,11 +91,11 @@ class LocalStorage implements Storage
 
 	public function refreshAll($user_id, $key = null)
 	{
-		foreach ($this->entries as $_unique_key => $_entry)
+		foreach (array_keys($this->entries) as $_unique_key)
 		{
 			list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
 
-			if ($user_id == $_user_id)
+			if (($user_id ?: '0') == $_user_id)
 			{
 				if (!isset($key) || (isset($key) && $this->keyMatches($key, $_key)))
 					unset($this->entries[$_unique_key]);
