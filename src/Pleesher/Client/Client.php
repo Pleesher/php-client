@@ -9,6 +9,11 @@ use Pleesher\Client\Exception\Exception;
  */
 class Client extends Oauth2Client
 {
+	const PARTICIPATION_STATUS_RESERVED              = 1;
+	const PARTICIPATION_STATUS_CLAIMED               = 2;
+	const PARTICIPATION_STATUS_ACHIEVED              = 3;
+	const PARTICIPATION_STATUS_AWAITING_CONFIRMATION = 4;
+
 	protected $goal_checkers = array();
 	protected $achievements_awarded_actions = array();
 	protected $achievements_revoked_actions = array();
@@ -187,6 +192,10 @@ class Client extends Oauth2Client
 		return isset($goals[$goal_id_or_code]) ? $goals[$goal_id_or_code] : null;
 	}
 
+	/**
+	 * Retrieves the list of goals achieved by a given user
+	 * @param int $user_id
+	 */
 	public function getAchievements($user_id)
 	{
 		$this->logger->info(__METHOD__, func_get_args());
@@ -195,6 +204,26 @@ class Client extends Oauth2Client
 		return array_filter($goals, function($goal) {
 			return $goal->achieved;
 		});
+	}
+
+	/**
+	 * Retrieves a list of participations (reservations, claims, achievements), given optional filters
+	 * @param array $filters
+	 */
+	public function getParticipations(array $filters = array())
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		if (isset($filters['status']))
+			$params = array('status' => $filters['status']);
+		if (isset($filters['max_age']))
+			$params = array('max_age' => $filters['max_age']);
+
+		$participations = $this->call('GET', 'participations', $params);
+		foreach ($participations as $participation)
+			$participation->datetime = new \DateTime($participation->datetime->date, new \DateTimeZone($participation->datetime->timezone));
+
+		return $participations;
 	}
 
 	/**
