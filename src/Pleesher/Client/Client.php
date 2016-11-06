@@ -115,6 +115,7 @@ class Client extends Oauth2Client
 	public function getGoals(array $options = array())
 	{
 		$this->logger->info(__METHOD__, func_get_args());
+		$this->cache_storage->refresh(null, 'participations_*', null);
 
 		$user_id = isset($options['user_id']) ? $options['user_id'] : null;
 		$cache_key = isset($user_id) ? 'goal_relative_to_user' : 'goal';
@@ -382,6 +383,7 @@ class Client extends Oauth2Client
 		}
 
 		$this->cache_storage->refresh(null, 'user', $user_id);
+		$this->cache_storage->refresh(null, 'participations_*', null);
 		$this->cache_storage->refreshAll($user_id, 'notification');
 
 		return $result;
@@ -409,6 +411,7 @@ class Client extends Oauth2Client
 		}
 
 		$this->cache_storage->refresh(null, 'user', $user_id);
+		$this->cache_storage->refresh(null, 'participations_*', null);
 		$this->cache_storage->refreshAll($user_id, 'notification');
 
 		return $result;
@@ -506,7 +509,7 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$result = $this->call('GET', 'get_user_merge_url', array('user_id' => $user_id));
+		$result = $this->call('GET', 'user_merge_url', array('user_id' => $user_id));
 		$this->cache_storage->refreshAll($user_id, 'notification');
 
 		return $result;
