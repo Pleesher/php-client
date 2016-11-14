@@ -369,7 +369,7 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$result = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
+		$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
 		foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
 		{
 			if (is_int($goal_id_or_code))
@@ -386,7 +386,7 @@ class Client extends Oauth2Client
 		$this->cache_storage->refresh(null, 'participations_*', null);
 		$this->cache_storage->refreshAll($user_id, 'notification');
 
-		return $result;
+		return $participations;
 	}
 
 	/**
@@ -535,7 +535,7 @@ class Client extends Oauth2Client
 
 	protected function getRootUrl()
 	{
-		return 'https://pleesher.com/api';
+		return 'http://pleesher.webdev.com/api';
 	}
 
 	/**
@@ -624,12 +624,15 @@ class Client extends Oauth2Client
 
 			if (!$goal_was_achieved && $goal->achieved)
 			{
-				$this->award($user_id, array($goal->id));
+				$participations = $this->award($user_id, array($goal->id));
+				$goal->participation = reset($participations);
+				unset($goal->participation->goal);
 				$goal->just_awarded = true;
 			}
 			else if ($goal_was_achieved && !$goal->achieved)
 			{
 				$this->revoke($user_id, array($goal->id));
+				unset($goal->participation);
 				$goal->just_revoked = true;
 			}
 		}
