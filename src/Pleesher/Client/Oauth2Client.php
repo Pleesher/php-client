@@ -160,7 +160,7 @@ abstract class Oauth2Client
 				return $result_contents;
 
 			case 404:
-				throw new NoSuchObjectException($result_contents->error);
+				throw new NoSuchObjectException($result_contents->error_description, $result_contents->error);
 
 			default:
 				throw new Exception($result_contents->error_description, $result_contents->error);
