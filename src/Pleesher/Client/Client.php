@@ -2,6 +2,7 @@
 namespace Pleesher\Client;
 
 use Pleesher\Client\Exception\Exception;
+use Pleesher\Client\Exception\NoSuchObjectException;
 
 /**
  *
@@ -190,7 +191,10 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		$goals = $this->getGoals(array_merge($options, array('index_by_code' => true)));
-		return isset($goals[$goal_id_or_code]) ? $goals[$goal_id_or_code] : null;
+		if (!isset($goals[$goal_id_or_code]))
+			throw new NoSuchObjectException(sprintf('No goal with ID or code "%s"', $goal_id_or_code), 'no_such_goal', array('goal_id_or_code' => $goal_id_or_code));
+
+		return $goals[$goal_id_or_code];
 	}
 
 	/**
@@ -372,14 +376,8 @@ class Client extends Oauth2Client
 		$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
 		foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
 		{
-			if (is_int($goal_id_or_code))
-				$goal_id = $goal_id_or_code;
-			else
-			{
-				$goal = $this->getGoal($goal_id_or_code);
-				$goal_id = $goal->id;
-			}
-			$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal_id);
+			$goal = $this->getGoal($goal_id_or_code);
+			$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal->id);
 		}
 
 		$this->cache_storage->refresh(null, 'user', $user_id);
@@ -400,14 +398,8 @@ class Client extends Oauth2Client
 		$result = $this->call('POST', 'revoke', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
 		foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
 		{
-			if (is_int($goal_id_or_code))
-				$goal_id = $goal_id_or_code;
-			else
-			{
-				$goal = $this->getGoal($goal_id_or_code);
-				$goal_id = $goal->id;
-			}
-			$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal_id);
+			$goal = $this->getGoal($goal_id_or_code);
+			$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal->id);
 		}
 
 		$this->cache_storage->refresh(null, 'user', $user_id);
@@ -426,14 +418,9 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		$result = $this->call('POST', 'deny', array('user_id' => $user_id, 'goal_id' => $goal_id_or_code));
-		if (is_int($goal_id_or_code))
-			$goal_id = $goal_id_or_code;
-		else
-		{
-			$goal = $this->getGoal($goal_id_or_code);
-			$goal_id = $goal->id;
-		}
-		$this->cache_storage->refresh($user_id, 'goal', $goal_id);
+
+		$goal = $this->getGoal($goal_id_or_code);
+		$this->cache_storage->refresh($user_id, 'goal', $goal->id);
 
 		return $result;
 	}
@@ -443,14 +430,9 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		$result = $this->call('POST', 'claim', array('user_id' => $user_id, 'goal_id' => $goal_id_or_code, 'message' => $message));
-		if (is_int($goal_id_or_code))
-			$goal_id = $goal_id_or_code;
-		else
-		{
-			$goal = $this->getGoal($goal_id_or_code);
-			$goal_id = $goal->id;
-		}
-		$this->cache_storage->refresh($user_id, 'goal', $goal_id);
+
+		$goal = $this->getGoal($goal_id_or_code);
+		$this->cache_storage->refresh($user_id, 'goal', $goal->id);
 
 		return $result;
 	}
