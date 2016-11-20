@@ -26,6 +26,7 @@ class Exception extends \Exception
 	public function __toString()
 	{
 		ob_start();
+		echo $this->message;
 		if (!empty($this->error_code))
 			echo ' (' . $this->error_code . ')';
 		return ob_get_clean();
