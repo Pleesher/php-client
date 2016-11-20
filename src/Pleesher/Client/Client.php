@@ -116,7 +116,6 @@ class Client extends Oauth2Client
 	public function getGoals(array $options = array())
 	{
 		$this->logger->info(__METHOD__, func_get_args());
-		$this->cache_storage->refresh(null, 'participations_*', null);
 
 		$user_id = isset($options['user_id']) ? $options['user_id'] : null;
 		$cache_key = isset($user_id) ? 'goal_relative_to_user' : 'goal';
@@ -166,16 +165,24 @@ class Client extends Oauth2Client
 
 		$goals = $this->cache_storage->loadAll($user_id, $cache_key);
 
-		$index_by_code = !empty($options['index_by_code']);
-		if ($index_by_code)
+		$index_by = isset($options['index_by']) ? $options['index_by'] : null;
+		switch ($index_by)
 		{
-			$indexed_goals = array();
-			foreach ($goals as $goal)
-			{
-				if (isset($goal->code))
-					$indexed_goals[$goal->code] = $goal;
-			}
-			$goals = $indexed_goals;
+			case 'id':
+				$indexed_goals = array();
+				foreach ($goals as $goal)
+					$indexed_goals[$goal->id] = $goal;
+				$goals = $indexed_goals;
+				break;
+			case 'code':
+				$indexed_goals = array();
+				foreach ($goals as $goal)
+				{
+					if (isset($goal->code))
+						$indexed_goals[$goal->code] = $goal;
+				}
+				$goals = $indexed_goals;
+				break;
 		}
 
 		return $goals;
@@ -190,7 +197,7 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$goals = $this->getGoals(array_merge($options, array('index_by_code' => true)));
+		$goals = $this->getGoals(array_merge($options, array('index_by' => is_int($goal_id_or_code) ? 'id' : 'code')));
 		if (!isset($goals[$goal_id_or_code]))
 			throw new NoSuchObjectException(sprintf('No goal with ID or code "%s"', $goal_id_or_code), 'no_such_goal', array('goal_id_or_code' => $goal_id_or_code));
 
@@ -487,6 +494,10 @@ class Client extends Oauth2Client
 		return $result;
 	}
 
+	/**
+	 * @param unknown $user_id
+	 * @return string
+	 */
 	public function getUserMergeUrl($user_id)
 	{
 		$this->logger->info(__METHOD__, func_get_args());
@@ -495,6 +506,83 @@ class Client extends Oauth2Client
 		$this->cache_storage->refreshAll($user_id, 'notification');
 
 		return $result;
+	}
+
+	/**
+	 * @param string $object_type
+	 * @param int $object_id
+	 * @param int $user_id
+	 * @param string $key
+	 * @return mixed
+	 */
+	public function getObjectData($object_type, $object_id, $user_id, $key)
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
+
+		$data = $this->cache_storage->load($user_id, $cache_key, $object_id);
+
+		if (isset($object_id))
+		{
+			if (is_null($data))
+			{
+				$data = $this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
+				$this->cache_storage->save($user_id, $cache_key, $object_id, $data);
+			}
+		}
+		else if (!is_array($data) || count($data) == 0)
+		{
+			$data = (array)$this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
+			$_data = array();
+			foreach ($data as $_object_id => $_value)
+			{
+				$_data[(int)$_object_id] = $_value;
+				$this->cache_storage->save($user_id, $cache_key, $_object_id, $_value);
+			}
+			$data = $_data;
+		}
+
+		return $data;
+	}
+
+	/**
+	 * @param string $object_type
+	 * @param int $object_id
+	 * @param int $user_id
+	 * @param string $key
+	 * @param string $value
+	 * @return mixed
+	 */
+	public function setObjectData($object_type, $object_id, $user_id, $key, $value)
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
+
+		$data = $this->call('POST', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key, 'value' => $value));
+		$this->cache_storage->refresh($user_id, $cache_key, $object_id);
+
+		return $data;
+	}
+
+	/**
+	 * @param string $object_type
+	 * @param int $object_id
+	 * @param int $user_id
+	 * @param string $key
+	 * @return mixed
+	 */
+	public function deleteObjectData($object_type, $object_id, $user_id, $key)
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
+
+		$data = $this->call('DELETE', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
+		$this->cache_storage->refresh($user_id, $cache_key, $object_id);
+
+		return $data;
 	}
 
 	public function refreshCache($user_id, $keys = null)
