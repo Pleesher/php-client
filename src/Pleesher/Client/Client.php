@@ -83,8 +83,10 @@ class Client extends Oauth2Client
 		{
 			$users = $this->call('GET', 'users');
 
+			$cache_data = array();
 			foreach ($users as $user)
-				$this->cache_storage->save(null, $cache_key, $user->id, $user);
+				$cache_data[$user->id] = $user;
+			$this->cache_storage->saveAll(null, $cache_key, $cache_data);
 		}
 
 		return $users;
@@ -310,8 +312,10 @@ class Client extends Oauth2Client
 
 			$rewards = $this->call('GET', 'rewards', $data);
 
+			$cache_data = array();
 			foreach ($rewards as $reward)
-				$this->cache_storage->save($user_id, $cache_key, $reward->id, $reward);
+				$cache_data[$reward->id] = $reward;
+			$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
 		}
 
 		return $rewards;
@@ -463,8 +467,11 @@ class Client extends Oauth2Client
 		if (!is_array($notifications))
 		{
 			$notifications = $this->call('GET', 'notifications', array('user_id' => $user_id));
+			$cache_data = array();
 			foreach ($notifications as $notification)
-				$this->cache_storage->save($user_id, $cache_key, $notification->id, $notification);
+				$cache_data[$notification->id] = $notification;
+
+			$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
 		}
 
 		return $notifications;
@@ -543,10 +550,8 @@ class Client extends Oauth2Client
 				$data = (array)$this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
 				$_data = array();
 				foreach ($data as $_object_id => $_value)
-				{
 					$_data[(int)$_object_id] = $_value;
-					$this->cache_storage->save($user_id, $cache_key, $_object_id, $_value);
-				}
+				$this->cache_storage->saveAll($user_id, $cache_key, $_data);
 				$data = $_data;
 			}
 		}
@@ -569,7 +574,7 @@ class Client extends Oauth2Client
 		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
 
 		$data = $this->call('POST', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key, 'value' => $value));
-		$this->cache_storage->refresh($user_id, $cache_key, $object_id);
+		$this->cache_storage->save($user_id, $cache_key, $object_id, $value);
 
 		return $data;
 	}
