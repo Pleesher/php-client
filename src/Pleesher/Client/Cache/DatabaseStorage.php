@@ -16,8 +16,41 @@ class DatabaseStorage implements Storage
 
 	public function save($user_id, $key, $id, $data)
 	{
+		$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key AND `id` = 0 AND `data`= :data';
+		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key, ':data' => Storage::EMPTY_ARRAY_STRING);
+		$query = $this->db->prepare($sql);
+		$query->execute($params);
+
 		$sql = 'REPLACE INTO ' . $this->cache_table_name . ' (`user_id`, `key`, `id`, `data`, `obsolete`) VALUES (:user_id, :key, :id, :data, 0)';
 		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key, ':id' => isset($id) ? $id : 0, ':data' => json_encode($data));
+		$query = $this->db->prepare($sql);
+		$query->execute($params);
+	}
+
+	public function saveAll($user_id, $key, array $data)
+	{
+		$tuples = array();
+		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key);
+
+		$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key';
+		$query = $this->db->prepare($sql);
+		$query->execute($params);
+
+		if (count($data) > 0)
+		{
+			foreach ($data as $id => $instance_data)
+			{
+				$tuples[] = '(:user_id, :key, :id' . $id . ', :data' . $id . ', 0)';
+				$params = array_merge($params, array(':id' . $id => $id, ':data' . $id => json_encode($instance_data)));
+			}
+
+			$sql = 'INSERT INTO ' . $this->cache_table_name . ' (`user_id`, `key`, `id`, `data`, `obsolete`) VALUES ' . join(', ', $tuples);
+		}
+		else
+		{
+			$sql = 'INSERT INTO ' . $this->cache_table_name . ' (`user_id`, `key`, `id`, `data`, `obsolete`) VALUES (:user_id, :key, 0, :data, 0)';
+			$params = array_merge($params, array(':data' => Storage::EMPTY_ARRAY_STRING));
+		}
 
 		$query = $this->db->prepare($sql);
 		$query->execute($params);
@@ -34,7 +67,7 @@ class DatabaseStorage implements Storage
 
 		$data = reset($result);
 
-		return !empty($data) ? json_decode($data) : $default;
+		return !empty($data) && !($id == 0 && $data == Storage::EMPTY_ARRAY_STRING) ? json_decode($data) : $default;
 	}
 
 	public function loadAll($user_id, $key)
@@ -45,15 +78,28 @@ class DatabaseStorage implements Storage
 		$query->execute($params);
 
 		if ($query->rowCount() > 0)
+			return null;
+
+		$sql = 'SELECT data FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key AND `id` = 0';
+		$query = $this->db->prepare($sql);
+		$query->execute($params);
+
+		$result = $query->fetchAll(\PDO::FETCH_COLUMN);
+		$data = reset($result);
+		if ($data == Storage::EMPTY_ARRAY_STRING)
 			return array();
 
 		$sql = 'SELECT id, data FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key';
 		$query = $this->db->prepare($sql);
 		$query->execute($params);
 
+		$result = $query->fetchAll(\PDO::FETCH_UNIQUE | \PDO::FETCH_ASSOC);
+		if (count($result) == 0)
+			return null;
+
 		$result = array_map(function($row) {
 			return $row['data'];
-		}, $query->fetchAll(\PDO::FETCH_UNIQUE | \PDO::FETCH_ASSOC));
+		}, $result);
 
 		return array_map('json_decode', $result);
 	}

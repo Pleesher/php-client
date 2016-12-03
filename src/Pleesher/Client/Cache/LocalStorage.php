@@ -17,14 +17,37 @@ class LocalStorage implements Storage
 	public function save($user_id, $key, $id, $data)
 	{
 		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
-		unset($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
-
 		if (!isset($this->entries[$unique_key]))
 			$this->entries[$unique_key] = array();
+
+		unset($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
 		$this->entries[$unique_key][isset($id) ? $id : 0] = $data;
 
 		if (isset($this->fallbackStorage))
 			$this->fallbackStorage->save($user_id, $key, $id, $data);
+	}
+
+	public function saveAll($user_id, $key, array $data)
+	{
+		foreach (array_keys($this->entries) as $_unique_key)
+		{
+			list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
+			if ($_user_id == $user_id && $this->keyMatches($key, $_key))
+				unset($this->entries[$_unique_key]);
+		}
+
+		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
+		if (!isset($this->entries[$unique_key]))
+			$this->entries[$unique_key] = array();
+
+		foreach ($data as $id => $instance_data)
+		{
+			unset($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
+			$this->entries[$unique_key][isset($id) ? $id : 0] = $instance_data;
+		}
+
+		if (isset($this->fallbackStorage))
+			$this->fallbackStorage->saveAll($user_id, $key, $data);
 	}
 
 	public function load($user_id, $key, $id = null, $default = null)
