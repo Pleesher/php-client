@@ -10,10 +10,12 @@ use Pleesher\Client\Exception\NoSuchObjectException;
  */
 class Client extends Oauth2Client
 {
-	const PARTICIPATION_STATUS_RESERVED              = 1;
-	const PARTICIPATION_STATUS_CLAIMED               = 2;
-	const PARTICIPATION_STATUS_ACHIEVED              = 3;
-	const PARTICIPATION_STATUS_AWAITING_CONFIRMATION = 4;
+	const PARTICIPATION_STATUS_RESERVED              = 'reserved';
+	const PARTICIPATION_STATUS_CLAIMED               = 'claimed';
+	const PARTICIPATION_STATUS_ACHIEVED              = 'achieved';
+	const PARTICIPATION_STATUS_AWAITING_CONFIRMATION = 'awaiting_confirmation';
+
+	protected $error_mode = self::ERROR_MODE_CACHE_VALUE;
 
 	protected $goal_checkers = array();
 	protected $achievements_awarded_actions = array();
@@ -77,7 +79,7 @@ class Client extends Oauth2Client
 
 		$users = $this->cache_storage->loadAll(null, $cache_key);
 
-		if (count($users) == 0)
+		if (!is_array($users))
 		{
 			$users = $this->call('GET', 'users');
 
@@ -124,7 +126,7 @@ class Client extends Oauth2Client
 
 		$awarded_goal_codes = array();
 		$revoked_goal_codes = array();
-		if (count($goals) == 0)
+		if (!is_array($goals))
 		{
 			$data = array();
 			if (isset($user_id))
@@ -132,6 +134,7 @@ class Client extends Oauth2Client
 
 			$goals = $this->call('GET', 'goals', $data);
 
+			$cache_data = array();
 			foreach ($goals as $goal)
 			{
 				if (isset($user_id))
@@ -151,8 +154,10 @@ class Client extends Oauth2Client
 						}
 					}
 				}
-				$this->cache_storage->save($user_id, $cache_key, $goal->id, $goal);
+				$cache_data[$goal->id] = $goal;
 			}
+
+			$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
 		}
 
 		if (count($awarded_goal_codes) > 0 || count($revoked_goal_codes) > 0)
@@ -297,7 +302,7 @@ class Client extends Oauth2Client
 
 		$rewards = $this->cache_storage->loadAll($user_id, $cache_key);
 
-		if (count($rewards) == 0)
+		if (!is_array($rewards))
 		{
 			$data = array();
 			if (isset($user_id))
@@ -455,7 +460,7 @@ class Client extends Oauth2Client
 		$cache_key = 'notification';
 		$notifications = $this->cache_storage->loadAll($user_id, $cache_key);
 
-		if (count($notifications) == 0)
+		if (!is_array($notifications))
 		{
 			$notifications = $this->call('GET', 'notifications', array('user_id' => $user_id));
 			foreach ($notifications as $notification)
@@ -521,26 +526,29 @@ class Client extends Oauth2Client
 
 		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
 
-		$data = $this->cache_storage->load($user_id, $cache_key, $object_id);
-
 		if (isset($object_id))
 		{
+			$data = $this->cache_storage->load($user_id, $cache_key, $object_id);
 			if (is_null($data))
 			{
 				$data = $this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
 				$this->cache_storage->save($user_id, $cache_key, $object_id, $data);
 			}
 		}
-		else if (!is_array($data) || count($data) == 0)
+		else
 		{
-			$data = (array)$this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
-			$_data = array();
-			foreach ($data as $_object_id => $_value)
+			$data = $this->cache_storage->loadAll($user_id, $cache_key);
+			if (!is_array($data))
 			{
-				$_data[(int)$_object_id] = $_value;
-				$this->cache_storage->save($user_id, $cache_key, $_object_id, $_value);
+				$data = (array)$this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
+				$_data = array();
+				foreach ($data as $_object_id => $_value)
+				{
+					$_data[(int)$_object_id] = $_value;
+					$this->cache_storage->save($user_id, $cache_key, $_object_id, $_value);
+				}
+				$data = $_data;
 			}
-			$data = $_data;
 		}
 
 		return $data;
