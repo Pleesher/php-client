@@ -12,6 +12,7 @@ abstract class Oauth2Client
 	protected $cache_storage;
 
 	public $logger;
+	public $in_error;
 
 	public function __construct($client_id, $client_secret, $api_version = '1.0', array $options = array())
 	{
@@ -19,6 +20,7 @@ abstract class Oauth2Client
 		$this->client_secret = $client_secret;
 		$this->api_version = $api_version;
 		$this->options = $options;
+		$this->in_error = false;
 
 		$this->setCacheStorage(new \Pleesher\Client\Cache\LocalStorage());
 		$this->setLogger(new \Psr\Log\NullLogger());
@@ -49,6 +51,7 @@ abstract class Oauth2Client
 				return $this->getResultContents($this->callWebservice($verb, $url, $data));
 			}
 
+			$this->in_error = true;
 			throw $e;
 		}
 	}
