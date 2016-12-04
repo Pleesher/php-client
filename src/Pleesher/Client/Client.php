@@ -15,11 +15,35 @@ class Client extends Oauth2Client
 	const PARTICIPATION_STATUS_ACHIEVED              = 'achieved';
 	const PARTICIPATION_STATUS_AWAITING_CONFIRMATION = 'awaiting_confirmation';
 
-	protected $error_mode = self::ERROR_MODE_CACHE_VALUE;
+	protected $exception_handler;
+	protected $previous_exception_handler;
 
 	protected $goal_checkers = array();
 	protected $achievements_awarded_actions = array();
 	protected $achievements_revoked_actions = array();
+
+	public function __construct($client_id, $client_secret, $api_version = '1.0', array $options = array())
+	{
+		parent::__construct($client_id, $client_secret, $api_version, $options);
+		$this->setExceptionHandler($this->getDefaultExceptionHandler());
+	}
+
+	public function setExceptionHandler(\Closure $handler)
+	{
+		$this->previous_exception_handler = $this->exception_handler;
+		$this->exception_handler = $handler;
+	}
+
+	public function restoreExceptionHandler()
+	{
+		if (is_callable($this->previous_exception_handler))
+			$this->exception_handler = $this->previous_exception_handler;
+	}
+
+	public function getDefaultExceptionHandler()
+	{
+		return function(Exception $e)	{ throw $e; };
+	}
 
 	/**
 	 * Binds a goal to its checker function
@@ -79,14 +103,19 @@ class Client extends Oauth2Client
 
 		$users = $this->cache_storage->loadAll(null, $cache_key);
 
-		if (!is_array($users))
-		{
-			$users = $this->call('GET', 'users');
+		try {
+			if (!is_array($users))
+			{
+				$users = $this->call('GET', 'users');
 
-			$cache_data = array();
-			foreach ($users as $user)
-				$cache_data[$user->id] = $user;
-			$this->cache_storage->saveAll(null, $cache_key, $cache_data);
+				$cache_data = array();
+				foreach ($users as $user)
+					$cache_data[$user->id] = $user;
+				$this->cache_storage->saveAll(null, $cache_key, $cache_data);
+			}
+
+		} catch (Exception $e) {
+			$this->handleException($e);
 		}
 
 		return $users;
@@ -104,10 +133,15 @@ class Client extends Oauth2Client
 
 		$user = $this->cache_storage->load(null, $cache_key, $user_id);
 
-		if (is_null($user))
-		{
-			$user = $this->call('GET', 'user', array('user_id' => (int)$user_id));
-			$this->cache_storage->save(null, $cache_key, $user_id, $user);
+		try {
+			if (is_null($user))
+			{
+				$user = $this->call('GET', 'user', array('user_id' => (int)$user_id));
+				$this->cache_storage->save(null, $cache_key, $user_id, $user);
+			}
+
+		} catch (Exception $e) {
+			$this->handleException($e);
 		}
 
 		return $user;
@@ -126,70 +160,76 @@ class Client extends Oauth2Client
 
 		$goals = $this->cache_storage->loadAll($user_id, $cache_key);
 
-		$awarded_goal_codes = array();
-		$revoked_goal_codes = array();
-		if (!is_array($goals))
-		{
-			$data = array();
-			if (isset($user_id))
-				$data['user_id'] = (int)$user_id;
+		try {
+			$awarded_goal_codes = array();
+			$revoked_goal_codes = array();
 
-			$goals = $this->call('GET', 'goals', $data);
-
-			$cache_data = array();
-			foreach ($goals as $goal)
+			if (!is_array($goals))
 			{
+				$data = array();
 				if (isset($user_id))
+					$data['user_id'] = (int)$user_id;
+
+				$goals = $this->call('GET', 'goals', $data);
+
+				$cache_data = array();
+				foreach ($goals as $goal)
 				{
-					$goal = $this->computeGoalProgress($goal, $user_id);
-					if (!empty($goal->code))
+					if (isset($user_id))
 					{
-						if (!empty($goal->just_awarded))
+						$goal = $this->computeGoalProgress($goal, $user_id);
+						if (!empty($goal->code))
 						{
-							$awarded_goal_codes[] = $goal->code;
-							unset($goal->just_awarded);
-						}
-						else if (!empty($goal->just_revoked))
-						{
-							$revoked_goal_codes[] = $goal->code;
-							unset($goal->just_revoked);
+							if (!empty($goal->just_awarded))
+							{
+								$awarded_goal_codes[] = $goal->code;
+								unset($goal->just_awarded);
+							}
+							else if (!empty($goal->just_revoked))
+							{
+								$revoked_goal_codes[] = $goal->code;
+								unset($goal->just_revoked);
+							}
 						}
 					}
+					$cache_data[$goal->id] = $goal;
 				}
-				$cache_data[$goal->id] = $goal;
+
+				$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
 			}
 
-			$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
-		}
+			if (count($awarded_goal_codes) > 0 || count($revoked_goal_codes) > 0)
+			{
+				if (count($awarded_goal_codes) > 0)
+					$this->fireAchievementsAwarded($awarded_goal_codes);
+				if (count($revoked_goal_codes) > 0)
+					$this->fireAchievementsRevoked($revoked_goal_codes);
+			}
 
-		if (count($awarded_goal_codes) > 0 || count($revoked_goal_codes) > 0)
-		{
-			if (count($awarded_goal_codes) > 0)
-				$this->fireAchievementsAwarded($awarded_goal_codes);
-			if (count($revoked_goal_codes) > 0)
-				$this->fireAchievementsRevoked($revoked_goal_codes);
-		}
+			$goals = $this->cache_storage->loadAll($user_id, $cache_key);
 
-		$goals = $this->cache_storage->loadAll($user_id, $cache_key);
+			$index_by = isset($options['index_by']) ? $options['index_by'] : null;
+			switch ($index_by)
+			{
+				case 'id':
+					$indexed_goals = array();
+					foreach ($goals as $goal)
+						$indexed_goals[$goal->id] = $goal;
+					$goals = $indexed_goals;
+					break;
+				case 'code':
+					$indexed_goals = array();
+					foreach ($goals as $goal)
+					{
+						if (isset($goal->code))
+							$indexed_goals[$goal->code] = $goal;
+					}
+					$goals = $indexed_goals;
+					break;
+			}
 
-		$index_by = isset($options['index_by']) ? $options['index_by'] : null;
-		switch ($index_by)
-		{
-			case 'id':
-				$indexed_goals = array();
-				foreach ($goals as $goal)
-					$indexed_goals[$goal->id] = $goal;
-				$goals = $indexed_goals;
-				break;
-			case 'code':
-				$indexed_goals = array();
-				foreach ($goals as $goal)
-				{
-					if (isset($goal->code))
-						$indexed_goals[$goal->code] = $goal;
-				}
-				$goals = $indexed_goals;
-				break;
+		} catch (Exception $e) {
+			$this->handleException($e);
 		}
 
 		return $goals;
@@ -243,14 +283,22 @@ class Client extends Oauth2Client
 			. (isset($filters['max_age']) ? $filters['max_age'] : 'anymaxage');
 
 		$participations = $this->cache_storage->load(null, $cache_key, null);
-		if (!is_array($participations))
-		{
-			$participations = $this->call('GET', 'participations', $params);
-			$this->cache_storage->save(null, $cache_key, null, $participations);
-		}
 
-		foreach ($participations as $participation)
-			$participation->datetime = new \DateTime($participation->datetime->date, new \DateTimeZone($participation->datetime->timezone));
+		try {
+			$awarded_goal_codes = array();
+			$revoked_goal_codes = array();
+			if (!is_array($participations))
+			{
+				$participations = $this->call('GET', 'participations', $params);
+				$this->cache_storage->save(null, $cache_key, null, $participations);
+			}
+
+			foreach ($participations as $participation)
+				$participation->datetime = new \DateTime($participation->datetime->date, new \DateTimeZone($participation->datetime->timezone));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+		}
 
 		return $participations;
 	}
@@ -269,10 +317,15 @@ class Client extends Oauth2Client
 
 		$achievers = $this->cache_storage->load(null, $cache_key, null);
 
-		if (!is_array($achievers))
-		{
-			$achievers = $this->call('GET', 'achievers', array('goal_id' => $goal->id));
-			$this->cache_storage->save(null, $cache_key, null, $achievers);
+		try {
+			if (!is_array($achievers))
+			{
+				$achievers = $this->call('GET', 'achievers', array('goal_id' => $goal->id));
+				$this->cache_storage->save(null, $cache_key, null, $achievers);
+			}
+
+		} catch (Exception $e) {
+			$this->handleException($e);
 		}
 
 		return $achievers;
@@ -304,18 +357,23 @@ class Client extends Oauth2Client
 
 		$rewards = $this->cache_storage->loadAll($user_id, $cache_key);
 
-		if (!is_array($rewards))
-		{
-			$data = array();
-			if (isset($user_id))
-				$data['user_id'] = (int)$user_id;
+		try {
+			if (!is_array($rewards))
+			{
+				$data = array();
+				if (isset($user_id))
+					$data['user_id'] = (int)$user_id;
 
-			$rewards = $this->call('GET', 'rewards', $data);
+				$rewards = $this->call('GET', 'rewards', $data);
 
-			$cache_data = array();
-			foreach ($rewards as $reward)
-				$cache_data[$reward->id] = $reward;
-			$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
+				$cache_data = array();
+				foreach ($rewards as $reward)
+					$cache_data[$reward->id] = $reward;
+				$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
+			}
+
+		} catch (Exception $e) {
+			$this->handleException($e);
 		}
 
 		return $rewards;
@@ -335,14 +393,19 @@ class Client extends Oauth2Client
 
 		$reward = $this->cache_storage->load($user_id, $cache_key, $reward_id);
 
-		if (is_null($reward))
-		{
-			$data = array('reward_id' => $reward_id);
-			if (isset($user_id))
-				$data['user_id'] = (int)$user_id;
+		try {
+			if (is_null($reward))
+			{
+				$data = array('reward_id' => $reward_id);
+				if (isset($user_id))
+					$data['user_id'] = (int)$user_id;
 
-			$reward = $this->call('GET', 'reward', $data);
-			$this->cache_storage->save($user_id, $cache_key, $reward->id, $reward);
+				$reward = $this->call('GET', 'reward', $data);
+				$this->cache_storage->save($user_id, $cache_key, $reward->id, $reward);
+			}
+
+		} catch (Exception $e) {
+			$this->handleException($e);
 		}
 
 		return $reward;
@@ -357,15 +420,22 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$result = $this->call('POST', 'unlock_reward', array(
-			'reward_id' => $reward_id,
-			'user_id' => $user_id
-		));
+		try {
+			$result = $this->call('POST', 'unlock_reward', array(
+				'reward_id' => $reward_id,
+				'user_id' => $user_id
+			));
 
-		$this->cache_storage->refresh(null, 'user', $user_id);
-		$this->cache_storage->refresh(null, 'reward', $reward_id);
+			$this->cache_storage->refresh(null, 'user', $user_id);
+			$this->cache_storage->refresh(null, 'reward', $reward_id);
 
-		return $result == 'ok';
+			return $result == 'ok';
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+		}
+
+		return false;
 	}
 
 	/**
@@ -389,16 +459,22 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
-		foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
-		{
-			$goal = $this->getGoal($goal_id_or_code);
-			$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal->id);
-		}
+		try {
+			$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
+			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
+			{
+				$goal = $this->getGoal($goal_id_or_code);
+				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal->id);
+			}
 
-		$this->cache_storage->refresh(null, 'user', $user_id);
-		$this->cache_storage->refresh(null, 'participations_*', null);
-		$this->cache_storage->refreshAll($user_id, 'notification');
+			$this->cache_storage->refresh(null, 'user', $user_id);
+			$this->cache_storage->refresh(null, 'participations_*', null);
+			$this->cache_storage->refreshAll($user_id, 'notification');
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$participations = array();
+		}
 
 		return $participations;
 	}
@@ -411,18 +487,24 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$result = $this->call('POST', 'revoke', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
-		foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
-		{
-			$goal = $this->getGoal($goal_id_or_code);
-			$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal->id);
+		try {
+			$result = $this->call('POST', 'revoke', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
+			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
+			{
+				$goal = $this->getGoal($goal_id_or_code);
+				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal->id);
+			}
+
+			$this->cache_storage->refresh(null, 'user', $user_id);
+			$this->cache_storage->refresh(null, 'participations_*', null);
+			$this->cache_storage->refreshAll($user_id, 'notification');
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$result = false;
 		}
 
-		$this->cache_storage->refresh(null, 'user', $user_id);
-		$this->cache_storage->refresh(null, 'participations_*', null);
-		$this->cache_storage->refreshAll($user_id, 'notification');
-
-		return $result;
+		return $result == 'ok';
 	}
 
 	/**
@@ -433,10 +515,16 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$result = $this->call('POST', 'deny', array('user_id' => $user_id, 'goal_id' => $goal_id_or_code));
+		try {
+			$result = $this->call('POST', 'deny', array('user_id' => $user_id, 'goal_id' => $goal_id_or_code));
 
-		$goal = $this->getGoal($goal_id_or_code);
-		$this->cache_storage->refresh($user_id, 'goal', $goal->id);
+			$goal = $this->getGoal($goal_id_or_code);
+			$this->cache_storage->refresh($user_id, 'goal', $goal->id);
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$result = false;
+		}
 
 		return $result;
 	}
@@ -445,12 +533,18 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$result = $this->call('POST', 'claim', array('user_id' => $user_id, 'goal_id' => $goal_id_or_code, 'message' => $message));
+		try {
+			$participation = $this->call('POST', 'claim', array('user_id' => $user_id, 'goal_id' => $goal_id_or_code, 'message' => $message));
 
-		$goal = $this->getGoal($goal_id_or_code);
-		$this->cache_storage->refresh($user_id, 'goal', $goal->id);
+			$goal = $this->getGoal($goal_id_or_code);
+			$this->cache_storage->refresh($user_id, 'goal', $goal->id);
 
-		return $result;
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$participation = false;
+		}
+
+		return $participation;
 	}
 
 	/**
@@ -464,14 +558,19 @@ class Client extends Oauth2Client
 		$cache_key = 'notification';
 		$notifications = $this->cache_storage->loadAll($user_id, $cache_key);
 
-		if (!is_array($notifications))
-		{
-			$notifications = $this->call('GET', 'notifications', array('user_id' => $user_id));
-			$cache_data = array();
-			foreach ($notifications as $notification)
-				$cache_data[$notification->id] = $notification;
+		try {
+			if (!is_array($notifications))
+			{
+				$notifications = $this->call('GET', 'notifications', array('user_id' => $user_id));
+				$cache_data = array();
+				foreach ($notifications as $notification)
+					$cache_data[$notification->id] = $notification;
 
-			$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
+				$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
+			}
+
+		} catch (Exception $e) {
+			$this->handleException($e);
 		}
 
 		return $notifications;
@@ -481,14 +580,30 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		return $this->call('GET', 'claims', array('user_id' => $user_id));
+		try {
+			$claims = $this->call('GET', 'claims', array('user_id' => $user_id));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$claims = array();
+		}
+
+		return $claims;
 	}
 
 	public function confirmAchievement($user_id, $goal_id)
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		return $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => array($goal_id)));
+		try {
+			$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => array($goal_id)));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$participations = array();
+		}
+
+		return $participations;
 	}
 
 	/**
@@ -500,10 +615,16 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$result = $this->call('POST', 'mark_notifications_read', array('user_id' => $user_id, 'event_ids' => (array)$event_ids));
-		$this->cache_storage->refreshAll($user_id, 'notification');
+		try {
+			$result = $this->call('POST', 'mark_notifications_read', array('user_id' => $user_id, 'event_ids' => (array)$event_ids));
+			$this->cache_storage->refreshAll($user_id, 'notification');
 
-		return $result;
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$result = false;
+		}
+
+		return $result == 'ok';
 	}
 
 	/**
@@ -514,8 +635,14 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$result = $this->call('GET', 'user_merge_url', array('user_id' => $user_id));
-		$this->cache_storage->refreshAll($user_id, 'notification');
+		try {
+			$result = $this->call('GET', 'user_merge_url', array('user_id' => $user_id));
+			$this->cache_storage->refreshAll($user_id, 'notification');
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$result = null;
+		}
 
 		return $result;
 	}
@@ -536,23 +663,33 @@ class Client extends Oauth2Client
 		if (isset($object_id))
 		{
 			$data = $this->cache_storage->load($user_id, $cache_key, $object_id);
-			if (is_null($data))
-			{
-				$data = $this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
-				$this->cache_storage->save($user_id, $cache_key, $object_id, $data);
+			try {
+				if (is_null($data))
+				{
+					$data = $this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
+					$this->cache_storage->save($user_id, $cache_key, $object_id, $data);
+				}
+
+			} catch (Exception $e) {
+				$this->handleException($e);
 			}
 		}
 		else
 		{
 			$data = $this->cache_storage->loadAll($user_id, $cache_key);
-			if (!is_array($data))
-			{
-				$data = (array)$this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
-				$_data = array();
-				foreach ($data as $_object_id => $_value)
-					$_data[(int)$_object_id] = $_value;
-				$this->cache_storage->saveAll($user_id, $cache_key, $_data);
-				$data = $_data;
+			try {
+				if (!is_array($data))
+				{
+					$data = (array)$this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
+					$_data = array();
+					foreach ($data as $_object_id => $_value)
+						$_data[(int)$_object_id] = $_value;
+					$this->cache_storage->saveAll($user_id, $cache_key, $_data);
+					$data = $_data;
+				}
+
+			} catch (Exception $e) {
+				$this->handleException($e);
 			}
 		}
 
@@ -573,10 +710,16 @@ class Client extends Oauth2Client
 
 		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
 
-		$data = $this->call('POST', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key, 'value' => $value));
-		$this->cache_storage->save($user_id, $cache_key, $object_id, $value);
+		try {
+			$result = $this->call('POST', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key, 'value' => $value));
+			$this->cache_storage->save($user_id, $cache_key, $object_id, $value);
 
-		return $data;
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$result = false;
+		}
+
+		return $result == 'ok';
 	}
 
 	/**
@@ -592,10 +735,16 @@ class Client extends Oauth2Client
 
 		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
 
-		$data = $this->call('DELETE', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
-		$this->cache_storage->refresh($user_id, $cache_key, $object_id);
+		try {
+			$result = $this->call('DELETE', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
+			$this->cache_storage->refresh($user_id, $cache_key, $object_id);
 
-		return $data;
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$result = false;
+		}
+
+		return $result == 'ok';
 	}
 
 	public function refreshCache($user_id, $keys = null)
@@ -614,6 +763,11 @@ class Client extends Oauth2Client
 
 		foreach ((array)$keys as $key)
 			$this->cache_storage->refreshGlobally($key);
+	}
+
+	protected function handleException(Exception $e)
+	{
+		call_user_func($this->exception_handler, $e);
 	}
 
 	protected function getRootUrl()
