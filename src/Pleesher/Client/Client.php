@@ -3,6 +3,7 @@ namespace Pleesher\Client;
 
 use Pleesher\Client\Exception\Exception;
 use Pleesher\Client\Exception\NoSuchObjectException;
+use Pleesher\Client\Exception\InvalidArgumentException;
 
 /**
  *
@@ -258,6 +259,9 @@ class Client extends Oauth2Client
 	public function getAchievements($user_id)
 	{
 		$this->logger->info(__METHOD__, func_get_args());
+
+		if (empty($user_id))
+			throw new InvalidArgumentException('getAchievements was called with an empty $user_id');
 
 		$goals = $this->getGoals(array('user_id' => $user_id));
 		return array_filter($goals, function($goal) {
