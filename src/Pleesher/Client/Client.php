@@ -43,7 +43,11 @@ class Client extends Oauth2Client
 
 	public function getDefaultExceptionHandler()
 	{
-		return function(Exception $e)	{ throw $e; };
+		return function(Exception $e)	{
+			$this->logger->error($e->__toString(), $e->getTrace());
+			$this->in_error = true;
+			throw $e;
+		};
 	}
 
 	/**
@@ -89,8 +93,16 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$this->cache_storage->refreshAll($user_id, 'goal_relative_to_user');
-		$this->getGoals(array('user_id' => $user_id));
+		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+
+			$this->cache_storage->refreshAll($user_id, 'goal_relative_to_user');
+			$this->getGoals(array('user_id' => $user_id));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+		}
 	}
 
 	/**
@@ -100,11 +112,11 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$cache_key = 'user';
-
-		$users = $this->cache_storage->loadAll(null, $cache_key);
-
 		try {
+			$cache_key = 'user';
+
+			$users = $this->cache_storage->loadAll(null, $cache_key);
+
 			if (!is_array($users))
 			{
 				$users = $this->call('GET', 'users');
@@ -117,6 +129,8 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
+			if (!isset($users) || !is_array($users))
+				$users = array();
 		}
 
 		return $users;
@@ -130,11 +144,14 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$cache_key = 'user';
-
-		$user = $this->cache_storage->load(null, $cache_key, $user_id);
-
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+
+			$cache_key = 'user';
+
+			$user = $this->cache_storage->load(null, $cache_key, $user_id);
+
 			if (is_null($user))
 			{
 				$user = $this->call('GET', 'user', array('user_id' => (int)$user_id));
@@ -143,6 +160,8 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
+			if (!isset($user) || !is_object($user))
+				$user = null;
 		}
 
 		return $user;
@@ -156,12 +175,12 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$user_id = isset($options['user_id']) ? $options['user_id'] : null;
-		$cache_key = isset($user_id) ? 'goal_relative_to_user' : 'goal';
-
-		$goals = $this->cache_storage->loadAll($user_id, $cache_key);
-
 		try {
+			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
+			$cache_key = isset($user_id) ? 'goal_relative_to_user' : 'goal';
+
+			$goals = $this->cache_storage->loadAll($user_id, $cache_key);
+
 			$awarded_goal_codes = array();
 			$revoked_goal_codes = array();
 
@@ -231,6 +250,8 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
+			if (!isset($goals) || !is_array($goals))
+				$goals = array();
 		}
 
 		return $goals;
@@ -245,11 +266,21 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$goals = $this->getGoals(array_merge($options, array('index_by' => is_int($goal_id_or_code) ? 'id' : 'code')));
-		if (!isset($goals[$goal_id_or_code]))
-			throw new NoSuchObjectException(sprintf('No goal with ID or code "%s"', $goal_id_or_code), 'no_such_goal', array('goal_id_or_code' => $goal_id_or_code));
+		try {
+			if (empty($goal_id_or_code))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_id_or_code');
 
-		return $goals[$goal_id_or_code];
+			$goals = $this->getGoals(array_merge($options, array('index_by' => is_int($goal_id_or_code) ? 'id' : 'code')));
+			if (!isset($goals[$goal_id_or_code]))
+				throw new NoSuchObjectException(sprintf('No goal with ID or code "%s"', $goal_id_or_code), 'no_such_goal', array('goal_id_or_code' => $goal_id_or_code));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			if (!isset($goals))
+				$goals = array();
+		}
+
+		return isset($goals[$goal_id_or_code]) ? $goals[$goal_id_or_code] : null;
 	}
 
 	/**
@@ -260,10 +291,18 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		if (empty($user_id))
-			throw new InvalidArgumentException('getAchievements was called with an empty $user_id');
+		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
 
-		$goals = $this->getGoals(array('user_id' => $user_id));
+			$goals = $this->getGoals(array('user_id' => $user_id));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			if (!isset($goals))
+				$goals = array();
+		}
+
 		return array_filter($goals, function($goal) {
 			return $goal->achieved;
 		});
@@ -277,18 +316,18 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		if (isset($filters['status']))
-			$params = array('status' => $filters['status']);
-		if (isset($filters['max_age']))
-			$params = array('max_age' => $filters['max_age']);
-
-		$cache_key = 'participations_'
-			. (isset($filters['status']) ? $filters['status'] : 'anystatus') . '_'
-			. (isset($filters['max_age']) ? $filters['max_age'] : 'anymaxage');
-
-		$participations = $this->cache_storage->load(null, $cache_key, null);
-
 		try {
+			if (isset($filters['status']))
+				$params = array('status' => $filters['status']);
+			if (isset($filters['max_age']))
+				$params = array('max_age' => $filters['max_age']);
+
+			$cache_key = 'participations_'
+				. (isset($filters['status']) ? $filters['status'] : 'anystatus') . '_'
+				. (isset($filters['max_age']) ? $filters['max_age'] : 'anymaxage');
+
+			$participations = $this->cache_storage->load(null, $cache_key, null);
+
 			$awarded_goal_codes = array();
 			$revoked_goal_codes = array();
 			if (!is_array($participations))
@@ -302,6 +341,8 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
+			if (!isset($participations) || !is_array($participations))
+				$participations = array();
 		}
 
 		return $participations;
@@ -315,13 +356,16 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$goal = $this->getGoal($goal_id_or_code);
-
-		$cache_key = 'achievers_of_' . $goal->id;
-
-		$achievers = $this->cache_storage->load(null, $cache_key, null);
-
 		try {
+			if (empty($goal_id_or_code))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_id_or_code');
+
+			$goal = $this->getGoal($goal_id_or_code);
+
+			$cache_key = 'achievers_of_' . $goal->id;
+
+			$achievers = $this->cache_storage->load(null, $cache_key, null);
+
 			if (!is_array($achievers))
 			{
 				$achievers = $this->call('GET', 'achievers', array('goal_id' => $goal->id));
@@ -330,6 +374,8 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
+			if (!isset($achievers) || !is_array($achievers))
+				$achievers = array();
 		}
 
 		return $achievers;
@@ -344,7 +390,19 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$goal = $this->getGoal($goal_id_or_code, array('user_id' => $user_id));
+		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+			if (empty($goal_id_or_code))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_id_or_code');
+
+			$goal = $this->getGoal($goal_id_or_code, array('user_id' => $user_id));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			return false;
+		}
+
 		return $goal->achieved;
 	}
 
@@ -356,12 +414,12 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$user_id = isset($options['user_id']) ? $options['user_id'] : null;
-		$cache_key = 'reward';
-
-		$rewards = $this->cache_storage->loadAll($user_id, $cache_key);
-
 		try {
+			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
+			$cache_key = 'reward';
+
+			$rewards = $this->cache_storage->loadAll($user_id, $cache_key);
+
 			if (!is_array($rewards))
 			{
 				$data = array();
@@ -378,6 +436,8 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
+			if (!isset($rewards) || !is_array($rewards))
+				$rewards = array();
 		}
 
 		return $rewards;
@@ -392,12 +452,15 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$user_id = isset($options['user_id']) ? $options['user_id'] : null;
-		$cache_key = 'reward';
-
-		$reward = $this->cache_storage->load($user_id, $cache_key, $reward_id);
-
 		try {
+			if (empty($reward_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $reward_id');
+
+			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
+			$cache_key = 'reward';
+
+			$reward = $this->cache_storage->load($user_id, $cache_key, $reward_id);
+
 			if (is_null($reward))
 			{
 				$data = array('reward_id' => $reward_id);
@@ -410,6 +473,8 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
+			if (!isset($reward) || !is_object($reward))
+				$reward = null;
 		}
 
 		return $reward;
@@ -425,6 +490,11 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($reward_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $reward_id');
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+
 			$result = $this->call('POST', 'unlock_reward', array(
 				'reward_id' => $reward_id,
 				'user_id' => $user_id
@@ -437,6 +507,7 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
+			return false;
 		}
 
 		return false;
@@ -451,7 +522,19 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$reward = $this->getReward($reward_id, array('user_id' => $user_id));
+		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+			if (empty($reward_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $reward_id');
+
+			$reward = $this->getReward($reward_id, array('user_id' => $user_id));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			return false;
+		}
+
 		return !!$reward->unlocked;
 	}
 
@@ -464,6 +547,11 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+			if (empty($goal_ids_or_codes))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_ids_or_codes');
+
 			$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
 			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
 			{
@@ -492,6 +580,11 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+			if (empty($goal_ids_or_codes))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_ids_or_codes');
+
 			$result = $this->call('POST', 'revoke', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
 			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
 			{
@@ -520,6 +613,11 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+			if (empty($goal_id_or_code))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_id_or_code');
+
 			$result = $this->call('POST', 'deny', array('user_id' => $user_id, 'goal_id' => $goal_id_or_code));
 
 			$goal = $this->getGoal($goal_id_or_code);
@@ -538,6 +636,11 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+			if (empty($goal_id_or_code))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_id_or_code');
+
 			$participation = $this->call('POST', 'claim', array('user_id' => $user_id, 'goal_id' => $goal_id_or_code, 'message' => $message));
 
 			$goal = $this->getGoal($goal_id_or_code);
@@ -545,7 +648,7 @@ class Client extends Oauth2Client
 
 		} catch (Exception $e) {
 			$this->handleException($e);
-			$participation = false;
+			$participation = null;
 		}
 
 		return $participation;
@@ -559,10 +662,13 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$cache_key = 'notification';
-		$notifications = $this->cache_storage->loadAll($user_id, $cache_key);
-
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+
+			$cache_key = 'notification';
+			$notifications = $this->cache_storage->loadAll($user_id, $cache_key);
+
 			if (!is_array($notifications))
 			{
 				$notifications = $this->call('GET', 'notifications', array('user_id' => $user_id));
@@ -585,6 +691,9 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+
 			$claims = $this->call('GET', 'claims', array('user_id' => $user_id));
 
 		} catch (Exception $e) {
@@ -600,6 +709,11 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+			if (empty($goal_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_id');
+
 			$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => array($goal_id)));
 
 		} catch (Exception $e) {
@@ -620,6 +734,11 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+			if (empty($event_ids))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $event_ids');
+
 			$result = $this->call('POST', 'mark_notifications_read', array('user_id' => $user_id, 'event_ids' => (array)$event_ids));
 			$this->cache_storage->refreshAll($user_id, 'notification');
 
@@ -640,6 +759,9 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+
 			$result = $this->call('GET', 'user_merge_url', array('user_id' => $user_id));
 			$this->cache_storage->refreshAll($user_id, 'notification');
 
@@ -662,26 +784,24 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
+		try {
+			if (empty($object_type))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $object_type');
 
-		if (isset($object_id))
-		{
-			$data = $this->cache_storage->load($user_id, $cache_key, $object_id);
-			try {
+			$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
+
+			if (isset($object_id))
+			{
+				$data = $this->cache_storage->load($user_id, $cache_key, $object_id);
 				if (is_null($data))
 				{
 					$data = $this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
 					$this->cache_storage->save($user_id, $cache_key, $object_id, $data);
 				}
-
-			} catch (Exception $e) {
-				$this->handleException($e);
 			}
-		}
-		else
-		{
-			$data = $this->cache_storage->loadAll($user_id, $cache_key);
-			try {
+			else
+			{
+				$data = $this->cache_storage->loadAll($user_id, $cache_key);
 				if (!is_array($data))
 				{
 					$data = (array)$this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
@@ -691,10 +811,12 @@ class Client extends Oauth2Client
 					$this->cache_storage->saveAll($user_id, $cache_key, $_data);
 					$data = $_data;
 				}
-
-			} catch (Exception $e) {
-				$this->handleException($e);
 			}
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			if (!isset($data) || !is_array($data))
+				$data = array();
 		}
 
 		return $data;
@@ -712,9 +834,12 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
-
 		try {
+			if (empty($object_type))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $object_type');
+
+			$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
+
 			$result = $this->call('POST', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key, 'value' => $value));
 			$this->cache_storage->save($user_id, $cache_key, $object_id, $value);
 
@@ -737,9 +862,12 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
-
 		try {
+			if (empty($object_type))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $object_type');
+
+			$cache_key = 'object_data_' . $object_type . '_' . ($key ?: 'anykey');
+
 			$result = $this->call('DELETE', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
 			$this->cache_storage->refresh($user_id, $cache_key, $object_id);
 
@@ -786,25 +914,32 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
-		$access_token = $this->cache_storage->load(null, 'access_token');
+		try {
+			$access_token = $this->cache_storage->load(null, 'access_token');
 
-		if (is_null($access_token) || time() > $access_token->expiration_time)
-		{
-			$access_token = $this->getResultContents($this->curl(array(
-				CURLOPT_HEADER => true,
-				CURLOPT_RETURNTRANSFER => true,
-				CURLOPT_URL => $this->getRootUrl() . '/token',
-				CURLOPT_CUSTOMREQUEST => 'POST',
-				CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
-				CURLOPT_USERPWD => $this->client_id . ':' . $this->client_secret,
-				CURLOPT_POSTFIELDS => html_entity_decode(http_build_query(array('grant_type' => 'client_credentials')))
-			)));
+			if (is_null($access_token) || time() > $access_token->expiration_time)
+			{
+				$access_token = $this->getResultContents($this->curl(array(
+					CURLOPT_HEADER => true,
+					CURLOPT_RETURNTRANSFER => true,
+					CURLOPT_URL => $this->getRootUrl() . '/token',
+					CURLOPT_CUSTOMREQUEST => 'POST',
+					CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
+					CURLOPT_USERPWD => $this->client_id . ':' . $this->client_secret,
+					CURLOPT_POSTFIELDS => html_entity_decode(http_build_query(array('grant_type' => 'client_credentials')))
+				)));
 
-			if (!isset($access_token->access_token, $access_token->expires_in))
-				throw new Exception('Could not retrieve access token');
+				if (!isset($access_token->access_token, $access_token->expires_in))
+					throw new Exception('Could not retrieve access token');
 
-			$access_token->expiration_time = time() + $access_token->expires_in;
-			$this->cache_storage->save(null, 'access_token', null, $access_token);
+				$access_token->expiration_time = time() + $access_token->expires_in;
+				$this->cache_storage->save(null, 'access_token', null, $access_token);
+			}
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			if (!isset($access_token) || !is_object($access_token))
+				$access_token = null;
 		}
 
 		return $access_token;
