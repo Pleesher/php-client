@@ -16,6 +16,8 @@ class DatabaseStorage implements Storage
 
 	public function save($user_id, $key, $id, $data)
 	{
+		$this->db->beginTransaction();
+
 		$sql = 'DELETE FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key AND `id` = 0 AND `data`= :data';
 		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key, ':data' => Storage::EMPTY_ARRAY_STRING);
 		$query = $this->db->prepare($sql);
@@ -25,10 +27,14 @@ class DatabaseStorage implements Storage
 		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key, ':id' => isset($id) ? $id : 0, ':data' => json_encode($data));
 		$query = $this->db->prepare($sql);
 		$query->execute($params);
+
+		$this->db->commit();
 	}
 
 	public function saveAll($user_id, $key, array $data)
 	{
+		$this->db->beginTransaction();
+
 		$tuples = array();
 		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key);
 
@@ -54,6 +60,8 @@ class DatabaseStorage implements Storage
 
 		$query = $this->db->prepare($sql);
 		$query->execute($params);
+
+		$this->db->commit();
 	}
 
 	public function load($user_id, $key, $id = 0, $default = null)
