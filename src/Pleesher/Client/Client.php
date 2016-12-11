@@ -44,8 +44,6 @@ class Client extends Oauth2Client
 	public function getDefaultExceptionHandler()
 	{
 		return function(Exception $e)	{
-			$this->logger->error($e->__toString(), $e->getTrace());
-			$this->in_error = true;
 			throw $e;
 		};
 	}
@@ -899,6 +897,8 @@ class Client extends Oauth2Client
 
 	protected function handleException(Exception $e)
 	{
+		$this->in_error = true;
+		$this->logger->error($e->__toString(), $e->getTrace());
 		call_user_func($this->exception_handler, $e);
 	}
 
