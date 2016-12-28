@@ -552,10 +552,7 @@ class Client extends Oauth2Client
 
 			$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
 			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
-			{
-				$goal = $this->getGoal($goal_id_or_code);
-				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal->id);
-			}
+				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $this->getGoalId($goal_id_or_code));
 
 			$this->cache_storage->refresh(null, 'user', $user_id);
 			$this->cache_storage->refresh(null, 'participations_*', null);
@@ -585,10 +582,7 @@ class Client extends Oauth2Client
 
 			$result = $this->call('POST', 'revoke', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
 			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
-			{
-				$goal = $this->getGoal($goal_id_or_code);
-				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal->id);
-			}
+				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $this->getGoalId($goal_id_or_code));
 
 			$this->cache_storage->refresh(null, 'user', $user_id);
 			$this->cache_storage->refresh(null, 'participations_*', null);
@@ -1016,5 +1010,20 @@ class Client extends Oauth2Client
 			$goal->achieved = isset($goal->participation) && $goal->participation->status == 'achieved';
 
 		return $goal;
+	}
+
+	protected function getGoalId($goal_id_or_code)
+	{
+		if (is_int($goal_id_or_code))
+			return $goal_id_or_code;
+
+		try {
+			$goal = $this->getGoal($goal_id_or_code);
+		} catch (NoSuchObjectException $e) {
+			$this->cache_storage->refreshAll(null, 'goal');
+			$goal = $this->getGoal($goal_id_or_code);
+		}
+
+		return $goal->id;
 	}
 }
