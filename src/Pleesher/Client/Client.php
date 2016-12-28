@@ -1017,12 +1017,15 @@ class Client extends Oauth2Client
 		if (is_int($goal_id_or_code))
 			return $goal_id_or_code;
 
+		$this->setExceptionHandler($this->getDefaultExceptionHandler());
 		try {
 			$goal = $this->getGoal($goal_id_or_code);
 		} catch (NoSuchObjectException $e) {
+			$this->restoreExceptionHandler();
 			$this->cache_storage->refreshAll(null, 'goal');
 			$goal = $this->getGoal($goal_id_or_code);
 		}
+		$this->restoreExceptionHandler();
 
 		return $goal->id;
 	}
