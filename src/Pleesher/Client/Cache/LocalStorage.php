@@ -85,7 +85,7 @@ class LocalStorage implements Storage
 		if (isset($this->fallbackStorage))
 			return $this->entries[$unique_key] = $this->fallbackStorage->loadAll($user_id, $key);
 
-		return array();
+		return null;
 	}
 
 	public function refresh($user_id, $key, $id = null)
@@ -100,10 +100,13 @@ class LocalStorage implements Storage
 			foreach ($this->entries as $_unique_key => $_sub_entries)
 			{
 				list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
-				foreach (array_keys($_sub_entries) as $_id)
+				if (is_array($_sub_entries))
 				{
-					if (($user_id ?: '0') == $_user_id && $this->keyMatches($key, $_key) && ($id ?: '0') == $_id)
-						$this->obsolete_keys[$_unique_key . self::KEY_SEPARATOR . $_id] = true;
+					foreach (array_keys($_sub_entries) as $_id)
+					{
+						if (($user_id ?: '0') == $_user_id && $this->keyMatches($key, $_key) && ($id ?: '0') == $_id)
+							$this->obsolete_keys[$_unique_key . self::KEY_SEPARATOR . $_id] = true;
+					}
 				}
 			}
 		}
