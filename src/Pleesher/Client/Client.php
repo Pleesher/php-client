@@ -570,7 +570,7 @@ class Client extends Oauth2Client
 	 * @param int $user_id
 	 * @param array|int|string $goal_ids_or_codes
 	 */
-	public function revoke($user_id, $goal_ids_or_codes)
+	public function revoke($user_id, $goal_ids_or_codes, array $options = array())
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
@@ -580,7 +580,10 @@ class Client extends Oauth2Client
 			if (empty($goal_ids_or_codes))
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_ids_or_codes');
 
-			$result = $this->call('POST', 'revoke', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
+			$params = array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes, 'duration' => isset($options['duration']) ? $options['duration'] : null);
+
+			$result = $this->call('POST', 'revoke', $params);
+
 			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
 				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $this->getGoalId($goal_id_or_code));
 
@@ -995,9 +998,16 @@ class Client extends Oauth2Client
 			if (!$goal_was_achieved && $goal->achieved)
 			{
 				$participations = $this->award($user_id, array($goal->id));
-				$goal->participation = reset($participations);
-				unset($goal->participation->goal);
-				$goal->just_awarded = true;
+				$participation = reset($participations) ?: null;
+
+				if (is_object($participation))
+				{
+					$goal->participation = $participation;
+					$goal->achieved = $participation->status == 'achieved';
+					unset($goal->participation->goal);
+				}
+				else
+					$goal->achieved = false;
 			}
 			else if ($goal_was_achieved && !$goal->achieved)
 			{
