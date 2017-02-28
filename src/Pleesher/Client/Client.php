@@ -551,8 +551,14 @@ class Client extends Oauth2Client
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_ids_or_codes');
 
 			$participations = $this->call('POST', 'award', array('user_id' => $user_id, 'goal_ids' => $goal_ids_or_codes));
+
+			// FIXME: why not use goal_ids from $participations instead of using getGoalId?
 			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
-				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $this->getGoalId($goal_id_or_code));
+			{
+				$goal_id = $this->getGoalId($goal_id_or_code);
+				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal_id);
+				$this->cache_storage->refresh(null, 'achievers_of_' . $goal_id, null);
+			}
 
 			$this->cache_storage->refresh(null, 'user', $user_id);
 			$this->cache_storage->refresh(null, 'participations_*', null);
@@ -584,8 +590,13 @@ class Client extends Oauth2Client
 
 			$result = $this->call('POST', 'revoke', $params);
 
+			// FIXME: have revoke return the revoked participations and do the same as in award() (see related FIXME)
 			foreach ((array)$goal_ids_or_codes as $goal_id_or_code)
-				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $this->getGoalId($goal_id_or_code));
+			{
+				$goal_id = $this->getGoalId($goal_id_or_code);
+				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal_id);
+				$this->cache_storage->refresh(null, 'achievers_of_' . $goal_id, null);
+			}
 
 			$this->cache_storage->refresh(null, 'user', $user_id);
 			$this->cache_storage->refresh(null, 'participations_*', null);
