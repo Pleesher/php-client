@@ -146,8 +146,9 @@ class Client extends Oauth2Client
 			if (empty($user_id))
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
 
-			$cache_key = 'user';
+			$this->getGoals($user_id);
 
+			$cache_key = 'user';
 			$user = $this->cache_storage->load(null, $cache_key, $user_id);
 
 			if (is_null($user))
