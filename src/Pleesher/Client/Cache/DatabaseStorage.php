@@ -114,7 +114,16 @@ class DatabaseStorage implements Storage
 
 	public function refresh($user_id, $key, $id = 0)
 	{
-		$insert_mode = strpos($key, '*') === false && is_null($this->load($user_id, $key, $id));
+		if (strpos($key, '*') === false)
+		{
+			$sql = 'SELECT 1 FROM ' . $this->cache_table_name . ' WHERE `user_id` = :user_id AND `key` = :key AND `id` = :id';
+			$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key, ':id' => isset($id) ? $id : 0);
+			$query = $this->db->prepare($sql);
+			$query->execute($params);
+			$insert_mode = $query->rowCount() == 0;
+		}
+		else
+			$insert_mode = false;
 
 		if ($insert_mode)
 		{
