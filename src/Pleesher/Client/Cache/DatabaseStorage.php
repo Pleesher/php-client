@@ -114,8 +114,18 @@ class DatabaseStorage implements Storage
 
 	public function refresh($user_id, $key, $id = 0)
 	{
-		$sql = 'UPDATE ' . $this->cache_table_name . ' SET obsolete = 1 WHERE `user_id` = :user_id AND `key` LIKE :key AND id = :id';
-		$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => str_replace('*', '%', $key), ':id' => isset($id) ? $id : 0);
+		$insert_mode = strpos($key, '*') === false && is_null($this->load($user_id, $key, $id));
+
+		if ($insert_mode)
+		{
+			$sql = 'INSERT INTO ' . $this->cache_table_name . ' (`user_id`, `key`, `id`, `data`, `obsolete`) VALUES (:user_id, :key, :id, :data, 1)';
+			$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => $key, ':id' => isset($id) ? $id : 0, ':data' => Storage::TO_BE_FETCHED_STRING);
+		}
+		else
+		{
+			$sql = 'UPDATE ' . $this->cache_table_name . ' SET obsolete = 1 WHERE `user_id` = :user_id AND `key` LIKE :key AND id = :id';
+			$params = array(':user_id' => isset($user_id) ? $user_id : 0, ':key' => str_replace('*', '%', $key), ':id' => isset($id) ? $id : 0);
+		}
 
 		$query = $this->db->prepare($sql);
 		$query->execute($params);
