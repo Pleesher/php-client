@@ -146,7 +146,7 @@ class Client extends Oauth2Client
 			if (empty($user_id))
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
 
-			$this->getGoals($user_id);
+			$this->getGoals(array('user_id' => $user_id));
 
 			$cache_key = 'user';
 			$user = $this->cache_storage->load(null, $cache_key, $user_id);
@@ -913,7 +913,7 @@ class Client extends Oauth2Client
 
 	protected function getRootUrl()
 	{
-		return 'https://pleesher.com/api';
+		return 'http://pleesher.webdev.com/api';
 	}
 
 	/**
