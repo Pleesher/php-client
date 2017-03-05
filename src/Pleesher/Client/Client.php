@@ -913,7 +913,7 @@ class Client extends Oauth2Client
 
 	protected function getRootUrl()
 	{
-		return 'http://pleesher.webdev.com/api';
+		return 'https://pleesher.com/api';
 	}
 
 	/**
