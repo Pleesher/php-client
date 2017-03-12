@@ -87,7 +87,7 @@ class Client extends Oauth2Client
 	 * @param int $user_id
 	 */
 
-	public function checkAchievements($user_id, array $goal_codes = null)
+	public function checkAchievements($user_id, array $goal_codes = null, array $options = array())
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
@@ -95,8 +95,14 @@ class Client extends Oauth2Client
 			if (empty($user_id))
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
 
-			$this->cache_storage->refreshAll($user_id, 'goal_relative_to_user');
-			$this->getGoals(array('user_id' => $user_id));
+			$from_scratch = isset($options['from_scratch']) ? $options['from_scratch'] : false;
+			$auto_award = isset($options['auto_award']) ? $options['auto_award'] : true;
+			$auto_revoke = isset($options['auto_revoke']) ? $options['auto_revoke'] : false;
+
+			if ($from_scratch)
+				$this->cache_storage->refreshAll($user_id, 'goal_relative_to_user');
+
+			$this->getGoals(array('user_id' => $user_id, 'auto_award' => $auto_award, 'auto_revoke' => $auto_revoke, 'force_recheck' => true));
 
 		} catch (Exception $e) {
 			$this->handleException($e);
@@ -176,46 +182,54 @@ class Client extends Oauth2Client
 
 		try {
 			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
+			$auto_award = isset($options['auto_award']) ? $options['auto_award'] : false;
+			$auto_revoke = isset($options['auto_revoke']) ? $options['auto_revoke'] : false;
+			$force_recheck = isset($options['force_recheck']) ? $options['force_recheck'] : false;
+			$check_achievements = !is_null($user_id) && ($force_recheck || $auto_award || $auto_revoke);
+
 			$cache_key = isset($user_id) ? 'goal_relative_to_user' : 'goal';
 
 			$goals = $this->cache_storage->loadAll($user_id, $cache_key);
+			$goals_in_cache = is_array($goals);
 
 			$awarded_goal_codes = array();
 			$revoked_goal_codes = array();
 
-			if (!is_array($goals))
+			if (!$goals_in_cache)
 			{
 				$data = array();
 				if (isset($user_id))
 					$data['user_id'] = (int)$user_id;
 
 				$goals = $this->call('GET', 'goals', $data);
+			}
 
-				$cache_data = array();
-				foreach ($goals as $goal)
+			$cache_data = array();
+			foreach ($goals as $goal)
+			{
+				if ($user_id && (!$goals_in_cache || $force_recheck))
 				{
-					if (isset($user_id))
+					$goal = $this->computeGoalProgress($goal, $user_id, array('force_compute' => !$goals_in_cache, 'auto_award' => $auto_award, 'auto_revoke' => $auto_revoke));
+					if (!empty($goal->code))
 					{
-						$goal = $this->computeGoalProgress($goal, $user_id);
-						if (!empty($goal->code))
+						if (!empty($goal->just_awarded))
 						{
-							if (!empty($goal->just_awarded))
-							{
-								$awarded_goal_codes[] = $goal->code;
-								unset($goal->just_awarded);
-							}
-							else if (!empty($goal->just_revoked))
-							{
-								$revoked_goal_codes[] = $goal->code;
-								unset($goal->just_revoked);
-							}
+							$awarded_goal_codes[] = $goal->code;
+							unset($goal->just_awarded);
+						}
+						else if (!empty($goal->just_revoked))
+						{
+							$revoked_goal_codes[] = $goal->code;
+							unset($goal->just_revoked);
 						}
 					}
-					$cache_data[$goal->id] = $goal;
 				}
 
-				$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
+				$cache_data[$goal->id] = $goal;
 			}
+
+			if (!$goals_in_cache || $check_achievements)
+				$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
 
 			if (count($awarded_goal_codes) > 0 || count($revoked_goal_codes) > 0)
 			{
@@ -294,7 +308,7 @@ class Client extends Oauth2Client
 			if (empty($user_id))
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
 
-			$goals = $this->getGoals(array('user_id' => $user_id));
+			$goals = $this->getGoals(array('user_id' => $user_id, 'auto_award' => true));
 
 		} catch (Exception $e) {
 			$this->handleException($e);
@@ -986,47 +1000,67 @@ class Client extends Oauth2Client
 			$action($goal_codes);
 	}
 
-	protected function computeGoalProgress($goal, $user_id)
+	/**
+	 * @param object $goal A goal whose progress to compute
+	 * @param int $user_id The ID of the user for whom that goal's progress is to compute
+	 * @param array $options May contain:
+	 *                       force_compute (boolean, default to false): if true, always computes goal status/progress
+	 *                       auto_award (boolean, default to true): if true, calls award() on newly-achieved goals
+	 *                       auto_revoke (boolean, default to true): if true, calls revoke() on newly-revoked goals
+	 * @return object A goal with relevant properties 'achieved', 'participation' and/or 'progress'
+	 */
+	protected function computeGoalProgress($goal, $user_id, array $options = array())
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
 		if (isset($this->goal_checkers[$goal->code]))
 		{
+			$force_compute = isset($options['force_compute']) ? $options['force_compute'] : false;
+			$auto_award = isset($options['auto_award']) ? $options['auto_award'] : true;
+			$auto_revoke = isset($options['auto_revoke']) ? $options['auto_revoke'] : true;
+
 			$goal_was_achieved = isset($goal->participation) && $goal->participation->status == 'achieved';
 
-			list($checker_function, $context) = $this->goal_checkers[$goal->code];
-			$goal_progress = $checker_function($goal, $user_id, $context);
-			if (is_array($goal_progress))
+			if ($force_compute || (!$goal_was_achieved && $auto_award) || ($goal_was_achieved && $auto_revoke))
 			{
-				list($current, $target) = $goal_progress;
-				$goal->progress = new \stdClass();
-				$goal->progress->current = $current;
-				$goal->progress->target = $target;
-				$goal->achieved = $current >= $target;
-			}
-			else
-				$goal->achieved = $goal_progress;
-
-			if (!$goal_was_achieved && $goal->achieved)
-			{
-				$participations = $this->award($user_id, array($goal->id));
-				$participation = reset($participations) ?: null;
-
-				if (is_object($participation))
+				list($checker_function, $context) = $this->goal_checkers[$goal->code];
+				$goal_progress = $checker_function($goal, $user_id, $context);
+				if (is_array($goal_progress))
 				{
-					$goal->participation = $participation;
-					$goal->achieved = $participation->status == 'achieved';
-					unset($goal->participation->goal);
+					list($current, $target) = $goal_progress;
+					$goal->progress = new \stdClass();
+					$goal->progress->current = $current;
+					$goal->progress->target = $target;
+					$goal->achieved = $current >= $target;
 				}
 				else
-					$goal->achieved = false;
+					$goal->achieved = $goal_progress;
+
+				if (!$goal_was_achieved && $goal->achieved)
+				{
+					$participations = $this->award($user_id, array($goal->id));
+					$participation = reset($participations) ?: null;
+
+					if (is_object($participation))
+					{
+						$goal->participation = $participation;
+						$goal->achieved = $participation->status == 'achieved';
+						unset($goal->participation->goal);
+					}
+					else
+						$goal->achieved = false;
+
+					$goal->just_awarded = true;
+				}
+				else if ($goal_was_achieved && !$goal->achieved)
+				{
+					$this->revoke($user_id, array($goal->id));
+					unset($goal->participation);
+					$goal->just_revoked = true;
+				}
 			}
-			else if ($goal_was_achieved && !$goal->achieved)
-			{
-				$this->revoke($user_id, array($goal->id));
-				unset($goal->participation);
-				$goal->just_revoked = true;
-			}
+			else
+				$goal->achieved = $goal_was_achieved;
 		}
 		else
 			$goal->achieved = isset($goal->participation) && $goal->participation->status == 'achieved';
