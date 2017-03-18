@@ -147,10 +147,12 @@ class Client extends Oauth2Client
 
 			$cache_key = 'queued_achievement_checks';
 
-			$queued_check_params = $this->cache_storage->load($user_id, $cache_key, null, array());
-			call_user_func_array(array($this, 'checkAchievements'), json_decode(json_encode($queued_check_params), true));
-
-			$this->cache_storage->refreshAll($user_id, $cache_key);
+			$queued_check_params = $this->cache_storage->load($user_id, $cache_key);
+			if (!is_null($queued_check_params))
+			{
+				call_user_func_array(array($this, 'checkAchievements'), json_decode(json_encode($queued_check_params), true));
+				$this->cache_storage->refreshAll($user_id, $cache_key);
+			}
 
 		} catch (Exception $e) {
 			$this->handleException($e);
