@@ -86,7 +86,6 @@ class Client extends Oauth2Client
 	 * Checks an user's achievements
 	 * @param int $user_id
 	 */
-
 	public function checkAchievements($user_id, array $goal_codes = null, array $options = array())
 	{
 		$this->logger->info(__METHOD__, func_get_args());
@@ -103,6 +102,55 @@ class Client extends Oauth2Client
 				$this->cache_storage->refreshAll($user_id, 'goal_relative_to_user');
 
 			$this->getGoals(array('user_id' => $user_id, 'auto_award' => $auto_award, 'auto_revoke' => $auto_revoke, 'force_recheck' => true));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+		}
+	}
+
+	/**
+	 * Queues achievements for checking later (see checkAchievementsQueued below)
+	 * @param int $user_id
+	 * @param array $goal_codes
+	 * @param array $options
+	 * @throws InvalidArgumentException
+	 */
+	public function checkAchievementsLater($user_id, array $goal_codes = null, array $options = array())
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+
+			$cache_key = 'queued_achievement_checks';
+
+			$this->cache_storage->save($user_id, $cache_key, null, func_get_args());
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+		}
+	}
+
+	/**
+	 * Checks achievements previously queued for a given user (see checkAchievementsLater below)
+	 * @param int $user_id
+	 * @throws InvalidArgumentException
+	 */
+	public function checkAchievementsQueued($user_id)
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		try {
+			if (empty($user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
+
+			$cache_key = 'queued_achievement_checks';
+
+			$queued_check_params = $this->cache_storage->load($user_id, $cache_key, null, array());
+			call_user_func_array(array($this, 'checkAchievements'), json_decode(json_encode($queued_check_params), true));
+
+			$this->cache_storage->refreshAll($user_id, $cache_key);
 
 		} catch (Exception $e) {
 			$this->handleException($e);
