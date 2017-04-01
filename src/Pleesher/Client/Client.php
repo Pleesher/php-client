@@ -231,19 +231,22 @@ class Client extends Oauth2Client
 		$this->logger->info(__METHOD__, func_get_args());
 
 		try {
+			// Compute fetching options
+
 			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
 			$auto_award = isset($options['auto_award']) ? $options['auto_award'] : false;
 			$auto_revoke = isset($options['auto_revoke']) ? $options['auto_revoke'] : false;
 			$force_recheck = isset($options['force_recheck']) ? $options['force_recheck'] : false;
 			$check_achievements = !is_null($user_id) && ($force_recheck || $auto_award || $auto_revoke);
 
+			// Retrieve goals from cache
+
 			$cache_key = isset($user_id) ? 'goal_relative_to_user' : 'goal';
 
 			$goals = $this->cache_storage->loadAll($user_id, $cache_key);
 			$goals_in_cache = is_array($goals);
 
-			$awarded_goal_codes = array();
-			$revoked_goal_codes = array();
+			// If goals aren't in cache, get them from a webservice call
 
 			if (!$goals_in_cache)
 			{
@@ -254,10 +257,37 @@ class Client extends Oauth2Client
 				$goals = $this->call('GET', 'goals', $data);
 			}
 
+			// If goals are requested with the perspective of a user, check whether the raw goal data alone has been updated since last time
+
+			if (isset($user_id))
+			{
+				$raw_goals = $this->cache_storage->loadAll(null, 'goal');
+				$raw_goals_in_cache = is_array($raw_goals);
+
+				if (!$raw_goals_in_cache)
+				{
+					$indexed_raw_goals = array();
+
+					$raw_goals = $this->call('GET', 'goals');
+					foreach ($raw_goals as $raw_goal)
+						$indexed_raw_goals[$raw_goal->id] = $raw_goal;
+					$raw_goals = $indexed_raw_goals;
+
+					$this->cache_storage->saveAll(null, 'goal', $raw_goals);
+				}
+			}
+
+			// Compute new cache data
+
+			$awarded_goal_codes = array();
+			$revoked_goal_codes = array();
+
 			$cache_data = array();
 			foreach ($goals as $goal)
 			{
-				if ($user_id && (!$goals_in_cache || $force_recheck))
+				// For specific users, if goals weren't in cache or a force recheck was requested, compute this goal's achievement progress
+
+				if (isset($user_id) && (!$goals_in_cache || $force_recheck))
 				{
 					$goal = $this->computeGoalProgress($goal, $user_id, array('force_compute' => !$goals_in_cache, 'auto_award' => $auto_award, 'auto_revoke' => $auto_revoke));
 					if (!empty($goal->code))
@@ -275,11 +305,25 @@ class Client extends Oauth2Client
 					}
 				}
 
+				// If raw goal data was changed, updated it in the cache too
+
+				if (isset($user_id) && isset($raw_goals[$goal->id]))
+				{
+					foreach ($raw_goals[$goal->id] as $property => $value)
+						$goal->$property = $value;
+				}
+
+				// Store the cache data for this goal
+
 				$cache_data[$goal->id] = $goal;
 			}
 
+			// Save new cache data if appropriate
+
 			if (!$goals_in_cache || $check_achievements)
 				$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
+
+			// Fire achievements awarded/revoked events
 
 			if (count($awarded_goal_codes) > 0 || count($revoked_goal_codes) > 0)
 			{
@@ -289,7 +333,11 @@ class Client extends Oauth2Client
 					$this->fireAchievementsRevoked($revoked_goal_codes);
 			}
 
+			// Refetch goals from cache (no longer sure why this is necessary)
+
 			$goals = $this->cache_storage->loadAll($user_id, $cache_key);
+
+			// Index returned goals by id or code (or nothing) as requested
 
 			$index_by = isset($options['index_by']) ? $options['index_by'] : null;
 			switch ($index_by)
