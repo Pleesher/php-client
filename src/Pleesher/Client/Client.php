@@ -55,8 +55,6 @@ class Client extends Oauth2Client
 	 */
 	public function bindGoalChecker($goal_code, \Closure $checker_function, $context = array())
 	{
-		$this->logger->info(__METHOD__, func_get_args());
-
 		$this->goal_checkers[$goal_code] = array($checker_function, $context);
 	}
 
