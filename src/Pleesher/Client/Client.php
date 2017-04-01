@@ -173,10 +173,12 @@ class Client extends Oauth2Client
 			{
 				$users = $this->call('GET', 'users');
 
-				$cache_data = array();
+				$users_by_id = array();
 				foreach ($users as $user)
-					$cache_data[$user->id] = $user;
-				$this->cache_storage->saveAll(null, $cache_key, $cache_data);
+					$users_by_id[$user->id] = $user;
+				$this->cache_storage->saveAll(null, $cache_key, $users_by_id);
+
+				$users = $users_by_id;
 			}
 
 		} catch (Exception $e) {
@@ -200,24 +202,18 @@ class Client extends Oauth2Client
 			if (empty($user_id))
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
 
-			$this->getGoals(array('user_id' => $user_id));
+			$users = $this->getUsers();
 
-			$cache_key = 'user';
-			$user = $this->cache_storage->load(null, $cache_key, $user_id);
-
-			if (is_null($user))
-			{
-				$user = $this->call('GET', 'user', array('user_id' => (int)$user_id));
-				$this->cache_storage->save(null, $cache_key, $user_id, $user);
-			}
+			if (!isset($users[$user_id]))
+				throw new NoSuchObjectException(sprintf('No user with ID %d', $user_id), 'no_such_user', array('user_id' => $user_id));
 
 		} catch (Exception $e) {
 			$this->handleException($e);
-			if (!isset($user) || !is_object($user))
-				$user = null;
+			if (!isset($users))
+				$users = array();
 		}
 
-		return $user;
+		return isset($users[$user_id]) ? $users[$user_id] : null;
 	}
 
 	/**
