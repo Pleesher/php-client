@@ -433,8 +433,6 @@ class Client extends Oauth2Client
 
 			$participations = $this->cache_storage->load(null, $cache_key, null);
 
-			$awarded_goal_codes = array();
-			$revoked_goal_codes = array();
 			if (!is_array($participations))
 			{
 				$participations = $this->call('GET', 'participations', $params);

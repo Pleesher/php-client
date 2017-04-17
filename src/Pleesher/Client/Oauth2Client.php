@@ -87,6 +87,7 @@ abstract class Oauth2Client
 
 		$header = substr($response, 0, $header_size);
 
+		$matches = array();
 		if (preg_match_all('/^([^:]+):\s+(.*)$/m', $header, $matches, PREG_SET_ORDER) === false)
 			throw new Exception('Could not parse http response headers');
 
@@ -150,11 +151,11 @@ abstract class Oauth2Client
 
 	protected function getResultContents($webservice_result)
 	{
-		list($http_status, $headers, $body) = $webservice_result;
+		list($http_status, , $body) = $webservice_result;
 		$result_contents = json_decode($body);
 		if (($json_error = json_last_error()) !== JSON_ERROR_NONE)
 		{
-			$this->logger->error('cURL result error: ' . $body);
+			$this->logger->error(sprintf('cURL result error (JSON error code %d): %s', $json_error, $body));
 			throw new Exception('Could not parse webservice query result');
 		}
 
