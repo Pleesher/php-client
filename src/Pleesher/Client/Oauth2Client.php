@@ -142,7 +142,9 @@ abstract class Oauth2Client
 			CURLOPT_URL => $this->getRootUrl() . '/' . $this->api_version . '/' . $uri,
 			CURLOPT_CUSTOMREQUEST => $verb,
 			CURLOPT_POSTFIELDS => html_entity_decode(http_build_query($post_fields)),
-			CURLOPT_HTTPHEADER => array('Authorization: Bearer ' . $access_token_object->access_token)
+			CURLOPT_HTTPHEADER => array('Authorization: Bearer ' . $access_token_object->access_token),
+			CURLOPT_SSL_VERIFYPEER => true,
+			CURLOPT_CAINFO => __DIR__ . '/cacert.pem',
 		));
 	}
 

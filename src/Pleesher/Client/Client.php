@@ -1041,7 +1041,9 @@ class Client extends Oauth2Client
 					CURLOPT_CUSTOMREQUEST => 'POST',
 					CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
 					CURLOPT_USERPWD => $this->client_id . ':' . $this->client_secret,
-					CURLOPT_POSTFIELDS => html_entity_decode(http_build_query(array('grant_type' => 'client_credentials')))
+					CURLOPT_POSTFIELDS => html_entity_decode(http_build_query(array('grant_type' => 'client_credentials'))),
+					CURLOPT_SSL_VERIFYPEER => true,
+					CURLOPT_CAINFO => __DIR__ . '/cacert.pem'
 				)));
 
 				if (!isset($access_token->access_token, $access_token->expires_in))
