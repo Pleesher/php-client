@@ -68,7 +68,7 @@ abstract class Oauth2Client
 		if ($curl_request === false)
 			throw new Exception('Could not initialize cURL request');
 
-		if (curl_setopt_array($curl_request, array_merge($this->getBaseCurlOptions(), $curl_options)) === false)
+		if (curl_setopt_array($curl_request, $curl_options + $this->getBaseCurlOptions()) === false)
 			throw new Exception('Could not set cURL request options (' . curl_error($curl_request) . ')');
 
 		// Execute cURL request and retrieve HTTP status code
@@ -178,10 +178,10 @@ abstract class Oauth2Client
 		// If cURL version < 7.10.0, these options aren't included by default
 		if (curl_version() < 461312)
 		{
-			$options = array_merge($options, array(
+			$options += array(
 				CURLOPT_SSL_VERIFYPEER => true,
 				CURLOPT_CAINFO => __DIR__ . '/cacert.pem',
-			));
+			);
 		}
 
 		return $options;
