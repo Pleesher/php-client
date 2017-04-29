@@ -1033,15 +1033,11 @@ class Client extends Oauth2Client
 			if (is_null($access_token) || time() > $access_token->expiration_time)
 			{
 				$access_token = $this->getResultContents($this->curl(array(
-					CURLOPT_HEADER => true,
-					CURLOPT_RETURNTRANSFER => true,
-					CURLOPT_URL => $this->getRootUrl() . '/token',
 					CURLOPT_CUSTOMREQUEST => 'POST',
-					CURLOPT_HTTPAUTH => CURLAUTH_BASIC,
-					CURLOPT_USERPWD => $this->client_id . ':' . $this->client_secret,
-					CURLOPT_POSTFIELDS => html_entity_decode(http_build_query(array('grant_type' => 'client_credentials'))),
-					CURLOPT_SSL_VERIFYPEER => true,
-					CURLOPT_CAINFO => __DIR__ . '/cacert.pem'
+					CURLOPT_URL           => $this->getRootUrl() . '/token',
+					CURLOPT_HTTPAUTH      => CURLAUTH_BASIC,
+					CURLOPT_USERPWD       => $this->client_id . ':' . $this->client_secret,
+					CURLOPT_POSTFIELDS    => html_entity_decode(http_build_query(array('grant_type' => 'client_credentials')))
 				)));
 
 				if (!isset($access_token->access_token, $access_token->expires_in))

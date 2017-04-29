@@ -68,7 +68,7 @@ abstract class Oauth2Client
 		if ($curl_request === false)
 			throw new Exception('Could not initialize cURL request');
 
-		if (curl_setopt_array($curl_request, $curl_options) === false)
+		if (curl_setopt_array($curl_request, array_merge($this->getBaseCurlOptions(), $curl_options)) === false)
 			throw new Exception('Could not set cURL request options (' . curl_error($curl_request) . ')');
 
 		// Execute cURL request and retrieve HTTP status code
@@ -138,14 +138,10 @@ abstract class Oauth2Client
 		$access_token_object = $this->getAccessToken();
 
 		return $this->curl(array(
-			CURLOPT_HEADER => true,
-			CURLOPT_RETURNTRANSFER => true,
-			CURLOPT_URL => $this->getRootUrl() . '/' . $this->api_version . '/' . $uri,
 			CURLOPT_CUSTOMREQUEST => $verb,
-			CURLOPT_POSTFIELDS => html_entity_decode(http_build_query($post_fields)),
-			CURLOPT_HTTPHEADER => array('Authorization: Bearer ' . $access_token_object->access_token),
-			CURLOPT_SSL_VERIFYPEER => true,
-			CURLOPT_CAINFO => __DIR__ . '/cacert.pem',
+			CURLOPT_URL           => $this->getRootUrl() . '/' . $this->api_version . '/' . $uri,
+			CURLOPT_POSTFIELDS    => html_entity_decode(http_build_query($post_fields)),
+			CURLOPT_HTTPHEADER    => array('Authorization: Bearer ' . $access_token_object->access_token)
 		));
 	}
 
@@ -170,6 +166,25 @@ abstract class Oauth2Client
 			default:
 				throw new Exception($result_contents->error_description, $result_contents->error);
 		}
+	}
+
+	protected function getBaseCurlOptions()
+	{
+		$options = array(
+			CURLOPT_HEADER => true,
+			CURLOPT_RETURNTRANSFER => true
+		);
+
+		// If cURL version < 7.10.0, these options aren't included by default
+		if (curl_version() < 461312)
+		{
+			$options = array_merge($options, array(
+				CURLOPT_SSL_VERIFYPEER => true,
+				CURLOPT_CAINFO => __DIR__ . '/cacert.pem',
+			));
+		}
+
+		return $options;
 	}
 
 	protected abstract function getRootUrl();
