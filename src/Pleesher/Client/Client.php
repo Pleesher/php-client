@@ -194,7 +194,7 @@ class Client extends Oauth2Client
 	 * Retrieves information about the user
 	 * @param int $user_id
 	 */
-	public function getUser($user_id)
+	public function getUser($user_id, array $options = array())
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
@@ -202,18 +202,23 @@ class Client extends Oauth2Client
 			if (empty($user_id))
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $user_id');
 
+			$create_if_needed = isset($options['create_if_needed']) ? !!$options['create_if_needed'] : true;
+
 			$users = $this->getUsers();
 
-			if (!isset($users[$user_id]))
+			if (isset($users[$user_id]))
+				$user = $users[$user_id];
+			else if ($create_if_needed)
+				$user = $this->call('GET', 'user', array('user_id' => $user_id));
+			else
 				throw new NoSuchObjectException(sprintf('No user with ID %d', $user_id), 'no_such_user', array('user_id' => $user_id));
 
 		} catch (Exception $e) {
 			$this->handleException($e);
-			if (!isset($users))
-				$users = array();
+			$user = null;
 		}
 
-		return isset($users[$user_id]) ? $users[$user_id] : null;
+		return isset($user) ? $user : null;
 	}
 
 	/**
@@ -246,7 +251,7 @@ class Client extends Oauth2Client
 			{
 				$data = array();
 				if (isset($user_id))
-					$data['user_id'] = (int)$user_id;
+					$data['user_id'] = $user_id;
 
 				$goals = $this->call('GET', 'goals', $data);
 			}
@@ -527,7 +532,7 @@ class Client extends Oauth2Client
 			{
 				$data = array();
 				if (isset($user_id))
-					$data['user_id'] = (int)$user_id;
+					$data['user_id'] = $user_id;
 
 				$rewards = $this->call('GET', 'rewards', $data);
 
@@ -568,7 +573,7 @@ class Client extends Oauth2Client
 			{
 				$data = array('reward_id' => $reward_id);
 				if (isset($user_id))
-					$data['user_id'] = (int)$user_id;
+					$data['user_id'] = $user_id;
 
 				$reward = $this->call('GET', 'reward', $data);
 				$this->cache_storage->save($user_id, $cache_key, $reward->id, $reward);
@@ -918,7 +923,7 @@ class Client extends Oauth2Client
 					$data = (array)$this->call('GET', 'object_data', array('object_type' => $object_type, 'object_id' => $object_id, 'user_id' => $user_id, 'key' => $key));
 					$_data = array();
 					foreach ($data as $_object_id => $_value)
-						$_data[(int)$_object_id] = $_value;
+						$_data[$_object_id] = $_value;
 					$this->cache_storage->saveAll($user_id, $cache_key, $_data);
 					$data = $_data;
 				}
