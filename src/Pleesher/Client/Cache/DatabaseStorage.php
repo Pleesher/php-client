@@ -44,10 +44,12 @@ class DatabaseStorage implements Storage
 
 		if (count($data) > 0)
 		{
+			$number = 0;
 			foreach ($data as $id => $instance_data)
 			{
-				$tuples[] = '(:user_id, :key, :id' . $id . ', :data' . $id . ', 0)';
-				$params = array_merge($params, array(':id' . $id => $id, ':data' . $id => json_encode($instance_data)));
+				$tuples[] = '(:user_id, :key, :id' . $number . ', :data' . $number . ', 0)';
+				$params = array_merge($params, array(':id' . $number => $id, ':data' . $number => json_encode($instance_data)));
+				$number++;
 			}
 
 			$sql = 'INSERT INTO ' . $this->cache_table_name . ' (`user_id`, `key`, `id`, `data`, `obsolete`) VALUES ' . join(', ', $tuples);
