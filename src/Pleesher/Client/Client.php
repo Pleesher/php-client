@@ -350,10 +350,7 @@ class Client extends Oauth2Client
 				case 'code':
 					$indexed_goals = array();
 					foreach ($goals as $goal)
-					{
-						if (isset($goal->code))
-							$indexed_goals[$goal->code] = $goal;
-					}
+						$indexed_goals[isset($goal->code) ? $goal->code : $goal->id] = $goal;
 					$goals = $indexed_goals;
 					break;
 			}
@@ -380,7 +377,7 @@ class Client extends Oauth2Client
 			if (empty($goal_id_or_code))
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $goal_id_or_code');
 
-			$goals = $this->getGoals(array_merge($options, array('index_by' => is_int($goal_id_or_code) ? 'id' : 'code')));
+			$goals = $this->getGoals(array_merge($options, array('index_by' => is_int($goal_id_or_code) || ctype_digit($goal_id_or_code) ? 'id' : 'code')));
 			if (!isset($goals[$goal_id_or_code]))
 				throw new NoSuchObjectException(sprintf('No goal with ID or code "%s"', $goal_id_or_code), 'no_such_goal', array('goal_id_or_code' => $goal_id_or_code));
 
@@ -1163,8 +1160,8 @@ class Client extends Oauth2Client
 
 	protected function getGoalId($goal_id_or_code)
 	{
-		if (is_int($goal_id_or_code))
-			return $goal_id_or_code;
+		if (is_int($goal_id_or_code) || ctype_digit($goal_id_or_code))
+			return (int)$goal_id_or_code;
 
 		$this->setExceptionHandler($this->getDefaultExceptionHandler());
 		try {
