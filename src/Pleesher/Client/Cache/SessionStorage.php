@@ -5,21 +5,21 @@ namespace Pleesher\Client\Cache;
 // FIXME: store session key somewhere and/or have it customizable
 class SessionStorage extends LocalStorage
 {
-	public function save($key, $id, $data)
+	public function save($user_id, $key, $id, $data)
 	{
-		parent::save($key, $id, $data);
+		parent::save($user_id, $key, $id, $data);
 		$_SESSION['pleesher_cache'] = $this->entries;
 	}
 
-	public function load($key, $id = null, $default = null)
+	public function load($user_id, $key, $id = null, $default = null)
 	{
 		$this->entries = isset($_SESSION['pleesher_cache']) ? $_SESSION['pleesher_cache'] : array();
-		return parent::load($key, $id, $default);
+		return parent::load($user_id, $key, $id, $default);
 	}
 
-	public function refresh($key, $id = null)
+	public function refresh($user_id, $key, $id = null)
 	{
-		parent::refresh($key, $id);
+		parent::refresh($user_id, $key, $id);
 		$_SESSION['pleesher_cache'] = $this->entries;
 	}
 }
