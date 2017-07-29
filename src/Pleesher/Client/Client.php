@@ -327,9 +327,9 @@ class Client extends Oauth2Client
 			if (count($awarded_goal_codes) > 0 || count($revoked_goal_codes) > 0)
 			{
 				if (count($awarded_goal_codes) > 0)
-					$this->fireAchievementsAwarded($awarded_goal_codes);
+					$this->fireAchievementsAwarded($user_id, $awarded_goal_codes);
 				if (count($revoked_goal_codes) > 0)
-					$this->fireAchievementsRevoked($revoked_goal_codes);
+					$this->fireAchievementsRevoked($user_id, $revoked_goal_codes);
 			}
 
 			// Refetch goals from cache (no longer sure why this is necessary)
@@ -992,6 +992,31 @@ class Client extends Oauth2Client
 		return $result == 'ok';
 	}
 
+	/**
+	 * @param $user_id
+	 * @param $goal_id
+	 * @param $required_action_id
+	 * @param array $arguments
+	 * @return mixed
+	 */
+	public function notifyAchievementActionDone($user_id, $goal_id, $required_action_id, array $arguments = array())
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		try {
+			if (empty($user_id) || empty($goal_id) || empty($required_action_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an $user_id, $goal_id and/or $required_action_id');
+
+			$participation = $this->call('POST', 'achievement_action', compact('user_id', 'goal_id', 'required_action_id'));
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$result = false;
+		}
+
+		return $participation;
+	}
+
 	public function refreshCache($user_id, $keys = null)
 	{
 		if (is_null($keys))
@@ -1070,24 +1095,24 @@ class Client extends Oauth2Client
 	 *
 	 * @param unknown $goal_codes
 	 */
-	protected function fireAchievementsAwarded($goal_codes)
+	protected function fireAchievementsAwarded($user_id, $goal_codes)
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
 		foreach ($this->achievements_awarded_actions as $action)
-			$action($goal_codes);
+			$action($user_id, $goal_codes);
 	}
 
 	/**
 	 *
 	 * @param unknown $goal_codes
 	 */
-	protected function fireAchievementsRevoked($goal_codes)
+	protected function fireAchievementsRevoked($user_id, $goal_codes)
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
 		foreach ($this->achievements_revoked_actions as $action)
-			$action($goal_codes);
+			$action($user_id, $goal_codes);
 	}
 
 	/**
