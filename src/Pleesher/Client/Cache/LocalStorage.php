@@ -90,7 +90,7 @@ class LocalStorage implements Storage
 
 	public function refresh($user_id, $key, $id = null)
 	{
-		if (strpos($key, '*') === false)
+		if (strpos($key,'*') === false)
 		{
 			$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0') . self::KEY_SEPARATOR . (isset($id) ? $id : '0');
 			$this->obsolete_keys[$unique_key] = true;
@@ -138,8 +138,8 @@ class LocalStorage implements Storage
 		{
 			foreach (array_keys($this->entries) as $_unique_key)
 			{
-				list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
-				if ($_user_id == $user_id && $this->keyMatches($key, $_key))
+				list($_key,) = explode(self::KEY_SEPARATOR, $_unique_key);
+				if ($this->keyMatches($key, $_key))
 					unset($this->entries[$_unique_key]);
 			}
 		}
