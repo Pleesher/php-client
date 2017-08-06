@@ -109,7 +109,6 @@ abstract class Oauth2Client
 	 * @param string $verb The HTTP verb to use (GET, POST or DELETE are supported)
 	 * @param string $uri The webservice URI to target
 	 * @param array $data An optional data array (for POST queries)
-	 * @throws \Keyyo\ManagerException\WebserviceQueryException
 	 * @return array An array containing three values: HTTP status code (as integer), headers (as array), body (as string)
 	 */
 	protected function callWebservice($verb, $uri, array $data = array(), array $options = array())
