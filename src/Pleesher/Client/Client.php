@@ -6,8 +6,9 @@ use Pleesher\Client\Exception\NoSuchObjectException;
 use Pleesher\Client\Exception\InvalidArgumentException;
 
 /**
- *
  * @author Jérémy Touati
+ * TODO: rewrite PHPDoc
+ * TODO: fix warnings/type-hint everything
  */
 class Client extends Oauth2Client
 {
@@ -224,6 +225,7 @@ class Client extends Oauth2Client
 	/**
 	 * Retrieves the list of existing goals
 	 * @param array $options
+	 * FIXME: split into $filters/$options?
 	 */
 	public function getGoals(array $options = array())
 	{
@@ -232,6 +234,7 @@ class Client extends Oauth2Client
 		try {
 			// Compute fetching options
 
+			$filters = isset($options['filters']) ? (array)$options['filters'] : array();
 			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
 			$auto_award = isset($options['auto_award']) ? $options['auto_award'] : false;
 			$auto_revoke = isset($options['auto_revoke']) ? $options['auto_revoke'] : false;
@@ -252,6 +255,8 @@ class Client extends Oauth2Client
 				$data = array();
 				if (isset($user_id))
 					$data['user_id'] = $user_id;
+				if (isset($filters['category']))
+					$data['category'] = $filters['category'];
 
 				$goals = $this->call('GET', 'goals', $data);
 			}
@@ -1008,6 +1013,17 @@ class Client extends Oauth2Client
 				throw new InvalidArgumentException(__METHOD__ . ' was called with an $user_id, $goal_id and/or $required_action_id');
 
 			$participation = $this->call('POST', 'achievement_action', compact('user_id', 'goal_id', 'required_action_id'));
+
+			if (is_object($participation) && $participation->status == 'achieved')
+			{
+				$this->logger->warning($user_id);
+				$this->logger->warning($goal_id);
+				$this->cache_storage->refresh(null, 'user', $user_id);
+				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal_id);
+				$this->cache_storage->refresh(null, 'achievers_of_' . $goal_id, null);
+				$this->cache_storage->refresh(null, 'participations_*', null);
+				$this->cache_storage->refreshAll($user_id, 'notification');
+			}
 
 		} catch (Exception $e) {
 			$this->handleException($e);
