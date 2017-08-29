@@ -1167,7 +1167,7 @@ class Client extends Oauth2Client
 				else
 					$goal->achieved = $goal_progress;
 
-				if (!$goal_was_achieved && $goal->achieved)
+				if (!$goal_was_achieved && $goal->achieved && $auto_award)
 				{
 					$participations = $this->award($user_id, array($goal->id));
 					$participation = reset($participations) ?: null;
@@ -1183,7 +1183,7 @@ class Client extends Oauth2Client
 
 					$goal->just_awarded = true;
 				}
-				else if ($goal_was_achieved && !$goal->achieved)
+				else if ($goal_was_achieved && !$goal->achieved && $auto_revoke)
 				{
 					$this->revoke($user_id, array($goal->id));
 					unset($goal->participation);
