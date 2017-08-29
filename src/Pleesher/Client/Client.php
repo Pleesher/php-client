@@ -1016,8 +1016,6 @@ class Client extends Oauth2Client
 
 			if (is_object($participation) && $participation->status == 'achieved')
 			{
-				$this->logger->warning($user_id);
-				$this->logger->warning($goal_id);
 				$this->cache_storage->refresh(null, 'user', $user_id);
 				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal_id);
 				$this->cache_storage->refresh(null, 'achievers_of_' . $goal_id, null);
