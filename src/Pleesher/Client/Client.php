@@ -236,7 +236,7 @@ class Client extends Oauth2Client
 
 			$filters = isset($options['filters']) ? (array)$options['filters'] : array();
 			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
-			$auto_award = isset($options['auto_award']) ? $options['auto_award'] : false;
+			$auto_award = isset($options['auto_award']) ? $options['auto_award'] : true;
 			$auto_revoke = isset($options['auto_revoke']) ? $options['auto_revoke'] : false;
 			$force_recheck = isset($options['force_recheck']) ? $options['force_recheck'] : false;
 			$check_achievements = !is_null($user_id) && ($force_recheck || $auto_award || $auto_revoke);
@@ -529,6 +529,8 @@ class Client extends Oauth2Client
 			$cache_key = 'reward';
 
 			$rewards = $this->cache_storage->loadAll($user_id, $cache_key);
+
+			$cache_key = isset($user_id) ? 'reward_relative_to_user' : 'reward';
 
 			if (!is_array($rewards))
 			{
