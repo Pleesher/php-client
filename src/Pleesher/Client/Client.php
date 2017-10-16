@@ -524,6 +524,8 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
+		$indexed_rewards = array();
+
 		try {
 			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
 			$cache_key = 'reward';
@@ -540,19 +542,23 @@ class Client extends Oauth2Client
 
 				$rewards = $this->call('GET', 'rewards', $data);
 
-				$cache_data = array();
 				foreach ($rewards as $reward)
-					$cache_data[$reward->id] = $reward;
-				$this->cache_storage->saveAll($user_id, $cache_key, $cache_data);
+					$indexed_rewards[$reward->id] = $reward;
+				$this->cache_storage->saveAll($user_id, $cache_key, $indexed_rewards);
+			}
+			else
+			{
+				foreach ($rewards as $reward)
+					$indexed_rewards[$reward->id] = $reward;
 			}
 
 		} catch (Exception $e) {
 			$this->handleException($e);
 			if (!isset($rewards) || !is_array($rewards))
-				$rewards = array();
+				$indexed_rewards = array();
 		}
 
-		return $rewards;
+		return $indexed_rewards;
 	}
 
 	/**
@@ -1012,11 +1018,11 @@ class Client extends Oauth2Client
 
 		try {
 			if (empty($user_id) || empty($goal_id) || empty($required_action_id))
-				throw new InvalidArgumentException(__METHOD__ . ' was called with an $user_id, $goal_id and/or $required_action_id');
+				throw new InvalidArgumentException(__METHOD__ . ' was called without an $user_id, $goal_id and/or $required_action_id');
 
 			$participation = $this->call('POST', 'achievement_action', compact('user_id', 'goal_id', 'required_action_id'));
 
-			if (is_object($participation) && $participation->status == 'achieved')
+			if (is_object($participation) && isset($participation->status) && $participation->status == 'achieved')
 			{
 				$this->cache_storage->refresh(null, 'user', $user_id);
 				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal_id);
