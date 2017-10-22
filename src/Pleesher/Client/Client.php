@@ -528,11 +528,9 @@ class Client extends Oauth2Client
 
 		try {
 			$user_id = isset($options['user_id']) ? $options['user_id'] : null;
-			$cache_key = 'reward';
+			$cache_key = isset($user_id) ? 'reward_relative_to_user' : 'reward';
 
 			$rewards = $this->cache_storage->loadAll($user_id, $cache_key);
-
-			$cache_key = isset($user_id) ? 'reward_relative_to_user' : 'reward';
 
 			if (!is_array($rewards))
 			{
@@ -1066,7 +1064,7 @@ class Client extends Oauth2Client
 
 	protected function getRootUrl()
 	{
-		return 'https://pleesher.com/api';
+		return DEV_MODE ? 'http://pleesher.webdev.com:1404/api/index.php' : 'https://pleesher.com/api';
 	}
 
 	/**
