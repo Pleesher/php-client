@@ -6,22 +6,30 @@ class LocalStorage implements Storage
 	const KEY_SEPARATOR = '##__##';
 
 	protected $fallbackStorage;
+	protected $scope = 'default';
 	protected $entries = array();
 	protected $obsolete_keys = array();
 
 	public function __construct(Storage $fallbackStorage = null)
 	{
 		$this->fallbackStorage = $fallbackStorage;
+		$this->entries[$this->scope] = array();
+	}
+
+	public function setScope($scope)
+	{
+		$this->entries[$scope] = $this->entries[$this->scope];
+		$this->scope = $scope;
 	}
 
 	public function save($user_id, $key, $id, $data)
 	{
 		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
-		if (!isset($this->entries[$unique_key]))
-			$this->entries[$unique_key] = array();
+		if (!isset($this->entries[$this->scope][$unique_key]))
+			$this->entries[$this->scope][$unique_key] = array();
 
 		unset($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
-		$this->entries[$unique_key][isset($id) ? $id : 0] = $data;
+		$this->entries[$this->scope][$unique_key][isset($id) ? $id : 0] = $data;
 
 		if (isset($this->fallbackStorage))
 			$this->fallbackStorage->save($user_id, $key, $id, $data);
@@ -29,21 +37,21 @@ class LocalStorage implements Storage
 
 	public function saveAll($user_id, $key, array $data)
 	{
-		foreach (array_keys($this->entries) as $_unique_key)
+		foreach (array_keys($this->entries[$this->scope]) as $_unique_key)
 		{
 			list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
 			if ($_user_id == $user_id && $this->keyMatches($key, $_key))
-				unset($this->entries[$_unique_key]);
+				unset($this->entries[$this->scope][$_unique_key]);
 		}
 
 		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
-		if (!isset($this->entries[$unique_key]))
-			$this->entries[$unique_key] = array();
+		if (!isset($this->entries[$this->scope][$unique_key]))
+			$this->entries[$this->scope][$unique_key] = array();
 
 		foreach ($data as $id => $instance_data)
 		{
 			unset($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
-			$this->entries[$unique_key][isset($id) ? $id : 0] = $instance_data;
+			$this->entries[$this->scope][$unique_key][isset($id) ? $id : 0] = $instance_data;
 		}
 
 		if (isset($this->fallbackStorage))
@@ -55,10 +63,10 @@ class LocalStorage implements Storage
 		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
 		$obsolete = !empty($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]);
 
-		if (!$obsolete && isset($this->entries[$unique_key][isset($id) ? $id : 0]))
-			return $this->entries[$unique_key][isset($id) ? $id : 0];
+		if (!$obsolete && isset($this->entries[$this->scope][$unique_key][isset($id) ? $id : 0]))
+			return $this->entries[$this->scope][$unique_key][isset($id) ? $id : 0];
 		if (isset($this->fallbackStorage))
-			return $this->entries[$unique_key][isset($id) ? $id : 0] = $this->fallbackStorage->load($user_id, $key, $id, $default);
+			return $this->entries[$this->scope][$unique_key][isset($id) ? $id : 0] = $this->fallbackStorage->load($user_id, $key, $id, $default);
 
 		return $default;
 	}
@@ -67,10 +75,10 @@ class LocalStorage implements Storage
 	{
 		$unique_key = $key . self::KEY_SEPARATOR . (isset($user_id) ? $user_id : '0');
 
-		if (isset($this->entries[$unique_key]))
+		if (isset($this->entries[$this->scope][$unique_key]))
 		{
 			$obsolete = false;
-			foreach (array_keys($this->entries[$unique_key]) as $id)
+			foreach (array_keys($this->entries[$this->scope][$unique_key]) as $id)
 			{
 				if (!empty($this->obsolete_keys[$unique_key . self::KEY_SEPARATOR . (isset($id) ? $id : '0')]))
 				{
@@ -80,10 +88,10 @@ class LocalStorage implements Storage
 			}
 
 			if (!$obsolete)
-				return $this->entries[$unique_key];
+				return $this->entries[$this->scope][$unique_key];
 		}
 		if (isset($this->fallbackStorage))
-			return $this->entries[$unique_key] = $this->fallbackStorage->loadAll($user_id, $key);
+			return $this->entries[$this->scope][$unique_key] = $this->fallbackStorage->loadAll($user_id, $key);
 
 		return null;
 	}
@@ -97,7 +105,7 @@ class LocalStorage implements Storage
 		}
 		else
 		{
-			foreach ($this->entries as $_unique_key => $_sub_entries)
+			foreach ($this->entries[$this->scope] as $_unique_key => $_sub_entries)
 			{
 				list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
 				if (is_array($_sub_entries))
@@ -117,14 +125,14 @@ class LocalStorage implements Storage
 
 	public function refreshAll($user_id, $key = null)
 	{
-		foreach (array_keys($this->entries) as $_unique_key)
+		foreach (array_keys($this->entries[$this->scope]) as $_unique_key)
 		{
 			list($_key, $_user_id) = explode(self::KEY_SEPARATOR, $_unique_key);
 
 			if (($user_id ?: '0') == $_user_id)
 			{
 				if (!isset($key) || (isset($key) && $this->keyMatches($key, $_key)))
-					unset($this->entries[$_unique_key]);
+					unset($this->entries[$this->scope][$_unique_key]);
 			}
 		}
 
@@ -136,15 +144,15 @@ class LocalStorage implements Storage
 	{
 		if (isset($key))
 		{
-			foreach (array_keys($this->entries) as $_unique_key)
+			foreach (array_keys($this->entries[$this->scope]) as $_unique_key)
 			{
 				list($_key,) = explode(self::KEY_SEPARATOR, $_unique_key);
 				if ($this->keyMatches($key, $_key))
-					unset($this->entries[$_unique_key]);
+					unset($this->entries[$this->scope][$_unique_key]);
 			}
 		}
 		else
-			$this->entries = array();
+			$this->entries[$this->scope] = array();
 
 		if (isset($this->fallbackStorage))
 			$this->fallbackStorage->refreshGlobally($key);
