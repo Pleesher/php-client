@@ -897,6 +897,29 @@ class Client extends Oauth2Client
 		return $result;
 	}
 
+	public function mergeUsers($src_user_id, $dst_user_id)
+	{
+		$this->logger->info(__METHOD__, func_get_args());
+
+		try {
+			if (empty($src_user_id) || empty($dst_user_id))
+				throw new InvalidArgumentException(__METHOD__ . ' was called with an empty $src_user_id and/or $dst_user_id');
+
+			$result = $this->call('POST', 'merge_users', array('src_user_id' => $src_user_id, 'dst_user_id' => $dst_user_id));
+
+			$this->cache_storage->refresh(null, 'user', $dst_user_id);
+			$this->cache_storage->refresh($dst_user_id, 'goal_relative_to_user', $dst_user_id);
+			$this->cache_storage->refresh(null, 'participations_*', null);
+			$this->cache_storage->refreshAll($dst_user_id, 'notification');
+
+		} catch (Exception $e) {
+			$this->handleException($e);
+			$result = null;
+		}
+
+		return $result;
+	}
+
 	/**
 	 * @param string $object_type
 	 * @param int $object_id
