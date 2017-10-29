@@ -1087,7 +1087,7 @@ class Client extends Oauth2Client
 
 	protected function getRootUrl()
 	{
-		return DEV_MODE ? 'http://pleesher.webdev.com:1404/api/index.php' : 'https://pleesher.com/api';
+		return 'https://pleesher.com/api';
 	}
 
 	/**
