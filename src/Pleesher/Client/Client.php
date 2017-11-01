@@ -680,6 +680,7 @@ class Client extends Oauth2Client
 
 			$this->cache_storage->refresh(null, 'user', $user_id);
 			$this->cache_storage->refresh(null, 'participations_*', null);
+			$this->cache_storage->refreshAll($user_id, 'reward_relative_to_user');
 			$this->cache_storage->refreshAll($user_id, 'notification');
 
 		} catch (Exception $e) {
@@ -718,6 +719,7 @@ class Client extends Oauth2Client
 
 			$this->cache_storage->refresh(null, 'user', $user_id);
 			$this->cache_storage->refresh(null, 'participations_*', null);
+			$this->cache_storage->refreshAll($user_id, 'reward_relative_to_user');
 			$this->cache_storage->refreshAll($user_id, 'notification');
 
 		} catch (Exception $e) {
@@ -909,6 +911,7 @@ class Client extends Oauth2Client
 
 			$this->cache_storage->refresh(null, 'user', $dst_user_id);
 			$this->cache_storage->refresh($dst_user_id, 'goal_relative_to_user', $dst_user_id);
+			$this->cache_storage->refresh($dst_user_id, 'reward_relative_to_user', $dst_user_id);
 			$this->cache_storage->refresh(null, 'participations_*', null);
 			$this->cache_storage->refreshAll($dst_user_id, 'notification');
 
@@ -1049,6 +1052,7 @@ class Client extends Oauth2Client
 				$this->cache_storage->refresh($user_id, 'goal_relative_to_user', $goal_id);
 				$this->cache_storage->refresh(null, 'achievers_of_' . $goal_id, null);
 				$this->cache_storage->refresh(null, 'participations_*', null);
+				$this->cache_storage->refreshAll($user_id, 'reward_relative_to_user');
 				$this->cache_storage->refreshAll($user_id, 'notification');
 			}
 
