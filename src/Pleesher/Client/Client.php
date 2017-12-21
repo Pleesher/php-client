@@ -1033,7 +1033,12 @@ class Client extends Oauth2Client
 		return $participation;
 	}
 
-	public function refreshCache($user_id, $keys = null)
+	public function refreshCache($user_id, $key, $id)
+	{
+		$this->cache_storage->refresh($user_id, $key, $id);
+	}
+
+	public function refreshAllCache($user_id, $keys = null)
 	{
 		if (is_null($keys))
 			$this->cache_storage->refreshAll($user_id);
