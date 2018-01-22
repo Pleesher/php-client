@@ -165,12 +165,14 @@ class Client extends Oauth2Client
 	{
 		$this->logger->info(__METHOD__, func_get_args());
 
+		$only_from_cache = isset($options['only_from_cache']) ? !!$options['only_from_cache'] : false;
+
 		try {
 			$cache_key = 'user';
 
 			$users = $this->cache_storage->loadAll(null, $cache_key);
 
-			if (!is_array($users))
+			if (!$only_from_cache && !is_array($users))
 			{
 				$users = $this->call('GET', 'users');
 
@@ -205,12 +207,12 @@ class Client extends Oauth2Client
 
 			$create_if_needed = isset($options['create_if_needed']) ? !!$options['create_if_needed'] : true;
 
-			$users = $this->getUsers();
+			$cached_users = $this->getUsers(['only_from_cache' => true]);
 
-			if (isset($users[$user_id]))
-				$user = $users[$user_id];
+			if (isset($cached_users[$user_id]))
+				$user = $cached_users[$user_id];
 			else if ($create_if_needed)
-				$user = $this->call('GET', 'user', array('user_id' => $user_id));
+				$user = $this->call('GET', 'user', array('user_id' => $user_id, 'create_if_needed' => true));
 			else
 				throw new NoSuchObjectException(sprintf('No user with ID %d', $user_id), 'no_such_user', array('user_id' => $user_id));
 
