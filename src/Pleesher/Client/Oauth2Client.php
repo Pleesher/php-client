@@ -26,10 +26,9 @@ abstract class Oauth2Client
 		$this->setLogger(new \Psr\Log\NullLogger());
 	}
 
-	public function setCacheStorage(\Pleesher\Client\Cache\Storage $cache_storage, $scope = null)
+	public function setCacheStorage(\Pleesher\Client\Cache\Storage $cache_storage)
 	{
 		$this->cache_storage = $cache_storage;
-		$this->cache_storage->setScope($scope);
 	}
 
 	public function setLogger(\Psr\Log\LoggerInterface $logger)

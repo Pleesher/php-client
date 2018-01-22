@@ -24,7 +24,7 @@ class Client extends Oauth2Client
 	protected $achievements_awarded_actions = array();
 	protected $achievements_revoked_actions = array();
 
-	public function __construct($client_id, $client_secret, $api_version = '1.1', array $options = array())
+	public function __construct($client_id, $client_secret, $api_version = '1.0', array $options = array())
 	{
 		parent::__construct($client_id, $client_secret, $api_version, $options);
 		$this->setExceptionHandler($this->getDefaultExceptionHandler());
