@@ -6,13 +6,21 @@ use Pleesher\Client\Exception\NoSuchObjectException;
 
 abstract class Oauth2Client
 {
+	const CURL_CONNECT_TIMEOUT = 3;
+	const CURL_OPERATION_TIMEOUT = 5;
+
+	public $logger;
+	public $in_error;
+
 	protected $client_id;
 	protected $client_secret;
 	protected $api_version;
 	protected $cache_storage;
 
-	public $logger;
-	public $in_error;
+	protected $curl_options = [
+		CURLOPT_CONNECTTIMEOUT => self::CURL_CONNECT_TIMEOUT,
+		CURLOPT_TIMEOUT => self::CURL_OPERATION_TIMEOUT
+	];
 
 	public function __construct($client_id, $client_secret, $api_version = '1.0', array $options = array())
 	{
@@ -34,6 +42,17 @@ abstract class Oauth2Client
 	public function setLogger(\Psr\Log\LoggerInterface $logger)
 	{
 		$this->logger = $logger;
+	}
+
+	public function setCurlOption($option_name, $option_value)
+	{
+		$this->curl_options[$option_name] = $option_value;
+	}
+
+	public function setCurlOptions(array $options)
+	{
+		foreach ($options as $option_name => $option_value)
+			$this->curl_options[$option_name] = $option_value;
 	}
 
 	public function call($verb, $url, array $data = array())
@@ -182,6 +201,8 @@ abstract class Oauth2Client
 				CURLOPT_CAINFO => __DIR__ . '/cacert.pem',
 			);
 		}
+
+		$options += $this->curl_options;
 
 		return $options;
 	}
