@@ -7,7 +7,7 @@ use Pleesher\Client\Exception\NoSuchObjectException;
 abstract class Oauth2Client
 {
 	const CURL_CONNECT_TIMEOUT = 3;
-	const CURL_OPERATION_TIMEOUT = 5;
+	const CURL_OPERATION_TIMEOUT = 10;
 
 	public $logger;
 	public $in_error;
