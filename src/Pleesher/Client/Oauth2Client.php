@@ -174,6 +174,9 @@ abstract class Oauth2Client
 			throw new Exception('Could not parse webservice query result');
 		}
 
+		if ($http_status != 200)
+			$this->logger->error(sprintf('HTTP error %d: %s (%s)', $http_status, $result_contents->error_description, $result_contents->error));
+
 		switch ($http_status)
 		{
 			case 200:
