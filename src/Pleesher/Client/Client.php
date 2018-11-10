@@ -212,7 +212,10 @@ class Client extends Oauth2Client
 			if (isset($cached_users[$user_id]))
 				$user = $cached_users[$user_id];
 			else if ($create_if_needed)
-				$user = $this->call('GET', 'user', array('user_id' => $user_id, 'create_if_needed' => true));
+			{
+				$user = $this->call('GET', 'user', ['user_id' => $user_id, 'create_if_needed' => true]);
+				$this->cache_storage->save(null, 'user', $user_id, $user);
+			}
 			else
 				throw new NoSuchObjectException(sprintf('No user with ID %d', $user_id), 'no_such_user', array('user_id' => $user_id));
 
