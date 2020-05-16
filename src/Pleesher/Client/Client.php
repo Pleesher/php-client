@@ -452,7 +452,24 @@ class Client extends Oauth2Client
 			}
 
 			foreach ($participations as $participation)
-				$participation->datetime = new \DateTime($participation->datetime->date, new \DateTimeZone($participation->datetime->timezone));
+			{
+				try {
+					$timezone = new \DateTimeZone($participation->datetime->timezone);
+				} catch (\Exception $e) {
+					$this->logger->warning('Could not retrieve participation date\'s timezone.', [
+						'participation' => $participation
+					]);
+					$timezone = null;
+				}
+				try {
+					$participation->datetime = new \DateTime($participation->datetime->date, $timezone);
+				} catch (\Exception $e) {
+					$this->logger->warning('Could not retrieve participation\'s date.', [
+						'participation' => $participation
+					]);
+					$participation->datetime = new \DateTime();
+				}
+			}
 
 		} catch (Exception $e) {
 			$this->handleException($e);
